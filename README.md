@@ -56,6 +56,10 @@ This project was built for one organization's needs and is shared as-is in the h
 
 Please do not report security problems in public issues. Use GitHub's private vulnerability reporting instead: the **Security** tab of this repository → **Report a vulnerability**.
 
+## Acknowledgements
+
+Written by Dobrin Tassev together with [Claude Code](https://claude.com/claude-code) (Anthropic), which did most of the coding, testing and the security review.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
