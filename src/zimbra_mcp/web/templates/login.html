@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ t("page.login_title") }}{% endblock %}
+{% block page %}login{% endblock %}
+{% block content %}
+  <ol class="steps" aria-label="{{ t("page.steps") }}">
+    <li data-step-for="step-login">{{ t("page.login_step_login") }}</li>
+    <li data-step-for="step-consent">{{ t("page.login_step_consent") }}</li>
+  </ol>
+  <section id="step-login" data-step>
+    <h1>{{ t("page.login_heading") }}</h1>
+    <p>{{ t("page.login_intro") }} {{ t("page.no_password") }}</p>
+    <button id="login-btn" type="button">{{ t("page.passkey_login") }}</button>
+  </section>
+  <section id="step-consent" data-step hidden>
+    <h1>{{ t("page.consent_heading") }}</h1>
+    <p>{{ t("page.signed_in_as", id="who") }}</p>
+    <p>{{ t("page.consent_access", org=theme.org_name, send_note=send_note) }}</p>
+    <p>{{ t("page.consent_only_you") }}</p>
+    <button id="approve-btn" type="button">{{ t("page.allow") }}</button>
+    <button id="deny-btn" type="button" class="secondary">{{ t("page.deny") }}</button>
+  </section>
+{% endblock %}

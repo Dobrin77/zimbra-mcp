@@ -1,0 +1,56 @@
+# Keep container logs from filling the disk: at most 5 files x 10 MB per service.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  zimbra-mcp:
+    build: .
+    restart: unless-stopped
+    logging: *logging
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      ZIMBRA_PREAUTH_KEYS_FILE: /run/secrets/preauth_keys
+      LDAP_BIND_PASSWORD_FILE: /run/secrets/ldap_password
+    secrets:
+      - preauth_keys
+      - ldap_password
+    volumes:
+      - ./data:/data
+    # Reachable only from this machine (Caddy); never directly from the network.
+    ports:
+      - "127.0.0.1:8000:8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      - zimbra-mcp
+    # Host networking, so Caddy sees each visitor's real IP address
+    # (needed for the internal-only enrollment page).
+    network_mode: host
+    env_file: .env
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+secrets:
+  preauth_keys:
+    file: ./secrets/preauth_keys
+  ldap_password:
+    file: ./secrets/ldap_password
+
+volumes:
+  caddy_data:
+  caddy_config:

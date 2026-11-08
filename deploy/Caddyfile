@@ -1,0 +1,37 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$MCP_HOSTNAME} {
+	encode gzip
+
+	# Calendar items and MCP messages are small; refuse oversized uploads early.
+	request_body {
+		max_size 25MB
+	}
+
+	# Passkey enrollment and calendar tokens only from the internal networks (also checked by the app).
+	@enroll_external {
+		path /enroll /enroll/* /calendar /calendar/*
+		not remote_ip {$ENROLL_ALLOWED_NETWORKS_CADDY}
+	}
+	respond @enroll_external "This page is only available from the internal network. / Страницата е достъпна само от вътрешната мрежа." 403
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+
+	reverse_proxy 127.0.0.1:8000 {
+		# The app reads the client address only from this header.
+		header_up X-Real-IP {remote_host}
+		# Streamed MCP responses must not be buffered.
+		flush_interval -1
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

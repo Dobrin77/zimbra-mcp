@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ t("page.enroll_title") }}{% endblock %}
+{% block page %}enroll{% endblock %}
+{% block content %}
+  <ol class="steps" aria-label="{{ t("page.steps") }}">
+    <li data-step-for="step-email">{{ t("page.enroll_step_email") }}</li>
+    <li data-step-for="step-code">{{ t("page.enroll_step_code") }}</li>
+    <li data-step-for="step-done">{{ t("page.enroll_step_done") }}</li>
+  </ol>
+  <section id="step-email" data-step>
+    <h1>{{ t("page.enroll_heading") }}</h1>
+    <p>{{ t("page.enroll_intro", org=theme.org_name) }}</p>
+    <p id="invite-note" hidden>{{ t("page.enroll_invite_note") }}</p>
+    <form id="start-form">
+      <div id="email-field">
+        <label for="email">{{ t("page.enroll_email") }}</label>
+        <input id="email" type="email" autocomplete="username" required>
+      </div>
+      <button type="submit">{{ t("page.enroll_send_code") }}</button>
+    </form>
+  </section>
+  <section id="step-code" data-step hidden>
+    <h1>{{ t("page.enroll_code_heading") }}</h1>
+    <p>{{ t("page.enroll_code_intro") }}</p>
+    <form id="code-form">
+      <label for="code">{{ t("page.enroll_code") }}</label>
+      <input id="code" inputmode="numeric" autocomplete="one-time-code" required>
+      <label for="label">{{ t("page.enroll_device") }}</label>
+      <input id="label" maxlength="60" placeholder="{{ t("page.enroll_device_placeholder") }}">
+      <button type="submit">{{ t("page.enroll_create") }}</button>
+    </form>
+  </section>
+  <section id="step-done" data-step hidden>
+    <h1>{{ t("page.enroll_done_heading") }}</h1>
+    <p>{{ t("page.enroll_done_intro") }}</p>
+    <ol>
+      <li>{{ t("page.enroll_done_1", org=theme.org_name) }}</li>
+      <li>{{ t("page.enroll_done_2") }}</li>
+      <li>{{ t("page.enroll_done_3") }}</li>
+    </ol>
+  </section>
+{% endblock %}

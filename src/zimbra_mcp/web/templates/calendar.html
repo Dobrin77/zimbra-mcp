@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ t("page.cal_title") }}{% endblock %}
+{% block page %}calendar{% endblock %}
+{% block content %}
+  <section id="step-login" data-step>
+    <h1>{{ t("page.cal_heading") }}</h1>
+    <p>{{ t("page.cal_intro", org=theme.org_name) }} {{ t("page.no_password") }}</p>
+    <button id="cal-login-btn" type="button">{{ t("page.passkey_login") }}</button>
+  </section>
+  <section id="step-tokens" data-step hidden>
+    <h1>{{ t("page.cal_tokens_heading") }}</h1>
+    <p>{{ t("page.signed_in_as", id="cal-who") }}</p>
+    <div id="cal-new" hidden>
+      <h2>{{ t("page.cal_new_token") }}</h2>
+      <p>{{ t("page.cal_new_intro") }}</p>
+      <dl>
+        <dt>{{ t("page.cal_url") }}</dt><dd><code id="cal-url">{{ dav_url }}</code><code id="cal-url-user"></code><code>/Calendar/</code></dd>
+        <dt>{{ t("page.cal_user") }}</dt><dd><code id="cal-user"></code></dd>
+        <dt>{{ t("page.cal_password") }}</dt><dd><code id="cal-token"></code></dd>
+      </dl>
+    </div>
+    <h2>{{ t("page.cal_your_tokens") }}</h2>
+    <ul id="cal-list"></ul>
+    <form id="cal-create">
+      <label for="cal-label">{{ t("page.cal_label") }}</label>
+      <input id="cal-label" maxlength="60" placeholder="{{ t("page.cal_label_placeholder") }}">
+      <button type="submit">{{ t("page.cal_new_token") }}</button>
+    </form>
+  </section>
+{% endblock %}

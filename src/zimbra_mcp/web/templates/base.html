@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>{% block title %}{% endblock %} – {{ theme.org_name }}</title>
+{% if theme.favicon %}<link rel="icon" href="/theme/favicon?v={{ theme.version }}">{% endif %}
+<style>
+  :root {
+    --accent:#2a4a8f; --accent-text:#fff;
+    --band:#16224a; --band-2:#2a4a8f; --band-text:#fff;
+    --bg:#eef1f6; --card:#fff; --text:#1d2330; --muted:#5b6475;
+    --danger:#b42318; --border:#dde2ea; --brand-bg:#fff; --brand-text:#16224a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --accent:#8aa6ec; --accent-text:#0b1020;
+      --band:#0b1330; --band-2:#1b2c5c;
+      --bg:#0f1218; --card:#1a1e26; --text:#e8eaee; --muted:#a3abb8;
+      --danger:#ff8a80; --border:#2c323d;
+    }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; background:var(--bg); color:var(--text);
+         font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .band { position:fixed; inset:0 0 auto 0; height:48vh; z-index:0;
+          background:
+            linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px) 0 0 / 32px 32px,
+            linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px) 0 0 / 32px 32px,
+            linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px) 0 0 / 8px 8px,
+            linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px) 0 0 / 8px 8px,
+            linear-gradient(135deg, var(--band), var(--band-2));
+          clip-path:polygon(0 0, 100% 0, 100% 72%, 0 100%); }
+  .wrap { position:relative; z-index:1; min-height:100vh; display:flex; flex-direction:column;
+          align-items:center; gap:18px; padding:32px 16px 16px; }
+  .welcome { margin:0; max-width:440px; text-align:center; color:var(--band-text);
+             font-size:1.05rem; font-weight:600; letter-spacing:.02em; }
+  main { width:100%; max-width:440px; background:var(--card); border:1px solid var(--border);
+         border-radius:16px; overflow:hidden; box-shadow:0 24px 60px rgba(12,20,45,.28); }
+  .brand { display:flex; align-items:center; justify-content:center; min-height:76px;
+           padding:18px 28px; background:var(--brand-bg); border-bottom:3px solid var(--accent); }
+  .brand img { display:block; max-height:52px; max-width:100%; }
+  .brand span { color:var(--brand-text); font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
+  .content { padding:24px 28px 28px; }
+  h1 { font-size:1.3rem; line-height:1.3; margin:0 0 12px; }
+  p, li { color:var(--muted); }
+  p { margin:0 0 16px; }
+  strong { color:var(--text); }
+  ol { padding-left:1.2em; margin:0; }
+  .steps { display:flex; gap:8px; list-style:none; margin:0 0 20px; padding:0; font-size:.8rem; }
+  .steps li { flex:1; padding-top:6px; border-top:3px solid var(--border); color:var(--muted); }
+  .steps li.done { border-color:var(--accent); }
+  .steps li.active { border-color:var(--accent); color:var(--text); font-weight:600; }
+  label { display:block; font-weight:600; margin:12px 0 4px; color:var(--text); }
+  input { width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border);
+          background:transparent; color:var(--text); font-size:1rem; }
+  button { width:100%; padding:12px; border-radius:10px; border:1px solid var(--accent);
+           background:var(--accent); color:var(--accent-text); font-size:1rem; font-weight:600;
+           cursor:pointer; margin-top:16px; }
+  button.secondary { background:transparent; color:var(--text); border-color:var(--border); margin-top:8px; }
+  button:disabled { opacity:.6; cursor:default; }
+  input:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .status { min-height:1.5em; margin-top:16px; color:var(--muted); }
+  .status:empty { margin-top:0; min-height:0; }
+  .content > section > :last-child, .content > p:last-of-type { margin-bottom:0; }
+  .status.error { color:var(--danger); }
+  footer { max-width:440px; text-align:center; font-size:.85rem; color:var(--muted); }
+  footer p { margin:4px 0; }
+  /* Equal growing spacers keep the card centred and push the copyright to the bottom. */
+  .grow { flex:1 1 0; }
+  .copyright { margin:0; text-align:center; font-size:.78rem; color:var(--muted); opacity:.8; }
+  .safe svg { width:15px; height:15px; vertical-align:-2px; margin-right:4px; }
+</style>
+{% if theme.css %}<link rel="stylesheet" href="/theme/theme.css?v={{ theme.version }}">{% endif %}
+</head>
+<body data-page="{% block page %}{% endblock %}">
+<div class="band" aria-hidden="true"></div>
+<div class="wrap">
+  <div class="grow"></div>
+  <p class="welcome">{{ theme.welcome or t("page.welcome", org=theme.org_name) }}</p>
+  <main>
+    <div class="brand">
+      {% if theme.logo %}<img src="/theme/logo?v={{ theme.version }}" alt="{{ theme.org_name }}">{% else %}<span>{{ theme.org_name }}</span>{% endif %}
+    </div>
+    <div class="content">
+      {% block content %}{% endblock %}
+      <div id="status" class="status" role="status"></div>
+    </div>
+  </main>
+  <footer>
+    <p class="safe">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      {{ t("page.never_password") }}
+    </p>
+    {% if theme.support %}<p>{{ theme.support }}</p>{% endif %}
+  </footer>
+  <div class="grow"></div>
+  {% if theme.copyright_line %}<p class="copyright">{{ theme.copyright_line }}</p>{% endif %}
+</div>
+{% block scripts %}<script type="application/json" id="i18n">{{ js_strings|tojson }}</script>
+<script src="/static/webauthn.js"></script>{% endblock %}
+</body>
+</html>

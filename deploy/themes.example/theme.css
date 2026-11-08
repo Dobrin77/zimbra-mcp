@@ -1,0 +1,17 @@
+/* Colours of the web pages. Remove what you do not need: the rest stays default.
+   --accent      buttons, links, progress bar, line under the logo
+   --band*       the blueprint band at the top
+   --brand-bg    background behind the logo (keep light if the logo is dark) */
+:root {
+  --accent: #26316c;
+  --band: #141b3f;
+  --band-2: #26316c;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* A lighter accent stays readable on the dark card. */
+    --accent: #9aa6e6;
+    --band: #0b1030;
+    --band-2: #1d2656;
+  }
+}

@@ -1,0 +1,38 @@
+[project]
+name = "zimbra-mcp"
+version = "0.2.0"
+description = "Remote multi-user MCP server for Zimbra (passkey OAuth, preauth, LDAP account checks)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp>=2.3,<3",
+    "python-zimbra>=2.4",
+    "python-dotenv>=1.0.0",
+    "beautifulsoup4>=4.12.0",
+    "webauthn>=3.0,<4",
+    "ldap3>=2.9",
+    "uvicorn>=0.30",
+    "jinja2>=3.1",
+    "httpx>=0.27",
+    "starlette>=1.10",
+    "defusedxml>=0.7",
+]
+
+[project.scripts]
+zimbra-mcp = "zimbra_mcp.server:main"
+zimbra-mcp-admin = "zimbra_mcp.admin:main"
+
+[project.optional-dependencies]
+test = ["pytest>=8.0", "pytest-asyncio>=0.23", "httpx>=0.27"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/zimbra_mcp"]
