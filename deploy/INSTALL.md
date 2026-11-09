@@ -4,6 +4,8 @@
 
 The examples use the domain `example.com`, the Zimbra server `mail.example.com` and the connector address `mcp.example.com`. Replace them with your own.
 
+This guide is for the **admin**: installing, configuring and maintaining the server. The steps for staff (enrollment, connecting Claude, the calendar) are in a separate guide that you send to everyone: [docs/USER-GUIDE.md](../docs/USER-GUIDE.md).
+
 ## 0. What you need
 
 - A dedicated VM: **2 vCPU, 2 GB RAM, 20–40 GB disk**, **Debian 12** or **Ubuntu 24.04**. The server also runs on 1 vCPU and 1 GB, but `docker compose up --build` may then fail for lack of memory.
@@ -240,22 +242,9 @@ This makes the connector **available** to everyone, but nobody is connected auto
 
 ### For staff
 
-1. **Once, from the office:** open `https://mcp.example.com/enroll`, enter your work e-mail, enter the code from the e-mail you receive, and confirm with Windows Hello, a fingerprint or your phone.
-2. **In Claude:** Settings → Connectors → find the organization's connector → **Connect** → **Sign in with passkey** → **Allow**. With a personal account (no Team), first use **Add custom connector** with the URL `https://mcp.example.com/mcp`.
-3. In the connector's settings, leave `send_email` on **"Needs approval"**.
+Enrollment, connecting, devices (Windows Hello, Mac, phone) and the security rules are in the [user guide](../docs/USER-GUIDE.md), sections 1–4. Send it to everyone before you tell them the connector is ready.
 
-The passkey must be on the device you click **Connect** from. After that the connection applies to the whole Claude account: web, Desktop and the mobile app.
-
-### Devices and passkeys
-
-- **Windows:** requires Windows Hello (PIN, fingerprint or face), Windows 10 version 1903 or newer. The PIN is under *Settings → Accounts → Sign-in options → Windows Hello PIN*. Windows Hello is not available in a **Remote Desktop (RDP)** session. Enroll from the computer you are sitting at, or from your phone.
-- **Mac:** requires **macOS 13 Ventura** or newer. Safari stores the passkey in **iCloud Keychain** and confirms it with Touch ID or the Mac login password.
-  - **iCloud Keychain must be on:** *System Settings → [your name] → iCloud → Passwords & Keychain*.
-  - The passkey syncs to all devices with the **same Apple ID** (iPhone, iPad). If you are signed in to a work Mac with a personal Apple ID, the passkey will also be on your personal devices.
-  - **Enroll and Connect in the same browser.** Chrome on Mac may offer to store the passkey in Google Password Manager. Safari then won't see it, and Claude Desktop often opens Connect in Safari. In Chrome, choose **iCloud Keychain**, which both browsers can see.
-- **Phone (iPhone / Android):** you can also enroll directly from a phone on the office Wi-Fi, or with an invite. The passkey is stored in iCloud Keychain or Google Password Manager.
-- **The device has no passkey:** at sign-in choose "Use a phone or tablet" and scan the QR code with the phone that holds the passkey. The computer needs Bluetooth.
-- **Backup:** anyone can enroll more than one passkey, e.g. on the computer and on the phone. Losing one device then doesn't lock them out.
+With a personal Claude account (no Team), the user first adds the connector themselves: **Add custom connector** with the URL `https://mcp.example.com/mcp`.
 
 ### Staff outside the office (invites)
 
@@ -315,14 +304,9 @@ docker compose exec zimbra-mcp zimbra-mcp-admin invites
 docker compose exec zimbra-mcp zimbra-mcp-admin cancel-invite ivan@example.com
 ```
 
-### What staff should know
+### How sending works
 
-- The sign-in page **never** asks for a password. If anyone asks for their password in its name, it is phishing.
-- Before sending a message, Claude shows the recipients, subject and body and waits for confirmation. **Read carefully before confirming**, especially the recipients.
-- If a message you received "tells" Claude to forward something to an unknown address, refuse. This is a kind of attack.
-- For every message sent by Claude they get a **copy in their Inbox** (they are in BCC; recipients don't see it). No copy is kept in Sent on the server. The copy can be moved to **Sent Items** by hand or automatically with an Outlook rule: *Home → Rules → Manage Rules & Alerts → New Rule → "from people or public group" = your own address and "sent to me" → "move it to the specified folder" = Sent Items*.
-- Messages deleted by Claude go to the **Trash**.
-- In the connector's settings in Claude, keep `send_email` on **"Needs approval"**, not "Always allow".
+For every message sent by Claude, the sender gets a **copy (BCC) in their Inbox**. No copy is kept in Sent on the server. Messages deleted by Claude go to the Trash. The user guide, section 4, explains how staff can move the copies to Sent Items.
 
 ## 6. Administration
 
@@ -413,20 +397,15 @@ Staff sync their Zimbra calendar with classic Outlook **without entering their p
 
 The gateway is part of the MCP server and runs at `https://mcp.example.com/dav/`. Outlook talks to it, and it talks to Zimbra on the user's behalf, just like the connector.
 
+### For the admin
+
+- Install the free **CalDav Synchronizer** add-in for Outlook (https://caldavsynchronizer.org) on the computers, by hand or centrally.
+- The page `https://mcp.example.com/calendar`, where staff create tokens, opens **only from the internal network**.
+- Each user can have at most 5 tokens, one per computer. They get a notification e-mail for every new token.
+
 ### For staff
 
-1. **The add-in.** Install the free **CalDav Synchronizer** add-in for Outlook (https://caldavsynchronizer.org). The admin can deploy it centrally.
-2. **Token.** From the office (internal network), open **https://mcp.example.com/calendar**. Press **Sign in with passkey**, then **New token**, and give it a name, e.g. "Office PC". The page shows the address, user name and token. The token is shown **only once**. You receive a notification e-mail that a token was created.
-3. **Outlook setup.**
-   - Open Outlook → the **CalDav Synchronizer** ribbon → **Synchronization Profiles** → **+** → **Generic CalDAV/CardDAV**.
-   - **DAV URL:** `https://mcp.example.com/dav/<your e-mail>/Calendar/` (the address from the page).
-   - **Username:** your e-mail.
-   - **Password:** the token.
-   - Click **Test or discover settings**, choose the calendar ("Calendar") and click **OK**, not Cancel.
-   - **Outlook folder:** choose or create a calendar folder in Outlook.
-   - **Synchronization mode:** two-way ("Outlook ↔ Server (Two-Way)").
-
-A token is for one device. Create a separate one for each computer, at most 5.
+Getting a token and setting up Outlook are in the [user guide](../docs/USER-GUIDE.md), section 6.
 
 ### Revoking a token
 

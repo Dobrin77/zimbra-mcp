@@ -38,6 +38,8 @@ Claude ──HTTPS + OAuth──▶ Caddy (mcp.example.com:443) ──▶ zimbra
 
 Вижте **[deploy/INSTALL.bg.md](deploy/INSTALL.bg.md)** (на английски: [deploy/INSTALL.md](deploy/INSTALL.md)). Сървърът се пуска с Docker Compose и Caddy (автоматични Let's Encrypt сертификати). Настройките са в `.env` (вижте `.env.example`), а тайните в `./secrets/`.
 
+За служителите има отделно **[ръководство](docs/USER-GUIDE.bg.md)** (на английски: [docs/USER-GUIDE.md](docs/USER-GUIDE.md)): регистрация, свързване в Claude и календарът в Outlook. Заменете `mcp.example.com` с вашия адрес и го изпратете на всички.
+
 ## Разработка
 
 ```bash

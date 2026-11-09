@@ -38,6 +38,8 @@ This server only sees mail that Zimbra still keeps. For older mail that exists o
 
 See **[deploy/INSTALL.md](deploy/INSTALL.md)** (Bulgarian: [deploy/INSTALL.bg.md](deploy/INSTALL.bg.md)). Deployment uses Docker Compose with Caddy (automatic Let's Encrypt certificates). Configuration is in `.env` (see `.env.example`); secrets live in `./secrets/`.
 
+For staff there is a separate **[user guide](docs/USER-GUIDE.md)** (Bulgarian: [docs/USER-GUIDE.bg.md](docs/USER-GUIDE.bg.md)): enrollment, connecting Claude and the calendar in Outlook. Replace `mcp.example.com` with your address and send it to everyone.
+
 ## Development
 
 ```bash
