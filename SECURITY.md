@@ -1,21 +1,29 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Only the latest commit on `main` receives security fixes. There are no
+separate release branches.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+## Reporting a vulnerability
 
-## Reporting a Vulnerability
+Please **do not** open a public issue for security problems.
 
-Use this section to tell people how to report a vulnerability.
+Report privately through GitHub: open the **Security** tab of this repository
+and click **Report a vulnerability**. Include what you found, how to reproduce
+it, and which component is affected (OAuth/passkey login, preauth, LDAP lookup,
+CalDAV gateway, MCP tools, deployment files).
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+What to expect:
+
+- an acknowledgement within 7 days;
+- a fix or a decision within 30 days for confirmed issues;
+- credit in the fix commit, if you want it.
+
+This is a small project maintained in spare time, so timelines are best effort.
+
+## Scope notes
+
+The server holds a Zimbra **preauth key**, which can sign in as any user of
+the domain. Findings that could expose that key, bypass passkey sign-in, or let
+one user reach another user's mailbox or calendar are treated as critical.
