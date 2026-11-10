@@ -228,7 +228,7 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient) -> None:
             days: Number of days if end_date is not specified (default: 7)
 
         Returns:
-            User's busy and free slots
+            User's busy slots (type busy, tentative or out_of_office) and free slots
         """
         if start_date:
             start_dt = datetime.strptime(start_date, "%Y-%m-%d")
@@ -266,16 +266,17 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient) -> None:
                         "type": "busy",
                     })
 
-                # Tentative slots
-                tentative = user.get("t", [])
-                if not isinstance(tentative, list):
-                    tentative = [tentative] if tentative else []
-                for slot in tentative:
-                    busy_slots.append({
-                        "start": _ms_to_datetime(slot.get("s")),
-                        "end": _ms_to_datetime(slot.get("e")),
-                        "type": "tentative",
-                    })
+                # Tentative and out-of-office ("u", unavailable) slots
+                for key, slot_type in (("t", "tentative"), ("u", "out_of_office")):
+                    slots = user.get(key, [])
+                    if not isinstance(slots, list):
+                        slots = [slots] if slots else []
+                    for slot in slots:
+                        busy_slots.append({
+                            "start": _ms_to_datetime(slot.get("s")),
+                            "end": _ms_to_datetime(slot.get("e")),
+                            "type": slot_type,
+                        })
 
                 # Free slots
                 free = user.get("f", [])

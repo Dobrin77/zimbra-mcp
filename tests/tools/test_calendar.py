@@ -176,3 +176,17 @@ class TestGetFreeBusy:
         assert len(result["busy_slots"]) == 2  # 1 busy + 1 tentative
         assert len(result["free_slots"]) == 1
         assert result["email"] == "alice@example.com"
+
+    def test_get_free_busy_out_of_office(self, cal_tools):
+        tools, client = cal_tools
+        client.get_free_busy = MagicMock(return_value={
+            "usr": {
+                "id": "alice@example.com",
+                "u": {"s": 1705312200000, "e": 1705398600000},
+                "f": [{"s": 1705398600000, "e": 1705485000000}],
+            }
+        })
+
+        result = tools["get_free_busy"]("alice@example.com", start_date="2024-01-15")
+        assert [s["type"] for s in result["busy_slots"]] == ["out_of_office"]
+        assert len(result["free_slots"]) == 1
