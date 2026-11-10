@@ -372,6 +372,17 @@ To switch it off as the administrator:
 zmprov ma ivan@example.com zimbraPrefOutOfOfficeReplyEnabled FALSE
 ```
 
+### Who is on leave
+
+The `who_is_out` tool takes the colleagues from the address book (GAL), as the user sees it, or from a distribution list. It then asks Zimbra for their free/busy, 100 at a time, and returns only those marked out of office. Only the dates are shown, never event details.
+
+If Claude's answer includes the warning "Not everyone was checked", the address book returned fewer people than there are. The limit is `zimbraGalMaxResults`. On the Zimbra server as the `zimbra` user:
+
+```bash
+zmprov gcf zimbraGalMaxResults
+zmprov mcf zimbraGalMaxResults 1000
+```
+
 ### Backups
 
 Back up `data/` (the passkey database) and `secrets/`. If `data/` is lost, staff simply enroll their passkeys again.

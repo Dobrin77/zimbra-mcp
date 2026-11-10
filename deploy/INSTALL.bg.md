@@ -372,6 +372,17 @@ zmprov ga ivan@example.com zimbraPrefOutOfOfficeReplyEnabled zimbraPrefOutOfOffi
 zmprov ma ivan@example.com zimbraPrefOutOfOfficeReplyEnabled FALSE
 ```
 
+### Кой е в отпуск
+
+Инструментът `who_is_out` взема колегите от адресната книга (GAL), каквато я вижда служителят, или от група (distribution list). После пита Zimbra за заетостта им по 100 наведнъж и връща само тези със статус „извън офиса“. Показват се само датите, не и подробностите за събитията.
+
+Ако отговорът на Claude съдържа предупреждението „Not everyone was checked“, адресната книга е върнала по-малко хора, отколкото има. Ограничението е `zimbraGalMaxResults`. На Zimbra сървъра като потребител `zimbra`:
+
+```bash
+zmprov gcf zimbraGalMaxResults
+zmprov mcf zimbraGalMaxResults 1000
+```
+
 ### Архивиране
 
 Архивирайте `data/` (базата с passkey-ове) и `secrets/`. Ако `data/` се загуби, служителите просто регистрират passkey наново.

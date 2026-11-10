@@ -4,7 +4,8 @@ Staff never sign in to Zimbra web (they don't know their passwords), so these
 tools are their only way to see, set or switch off the auto-reply. Every
 change also puts a notice with the text and the period in the user's Inbox,
 and keeps an "Out of office" all-day event in their calendar so colleagues
-can see the absence.
+can see the absence. who_is_out lists the colleagues whose free/busy shows
+"out of office", from the address book or a department group.
 """
 
 import logging
@@ -225,6 +226,135 @@ def register_out_of_office_tools(
             _notify(client, org_name, t("ooo_off_subject"), t("ooo_off_text", email=client.config.user))
         logger.info("Out-of-office disabled for %s (was %s)", client.config.user, "on" if was_enabled else "off")
         return {"success": True, "enabled": False, "was_enabled": was_enabled, "calendar_event": event_change}
+
+
+    @mcp.tool(annotations=READ_ONLY)
+    def who_is_out(
+        start_date: str | None = None,
+        end_date: str | None = None,
+        group: str | None = None,
+        emails: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Who is on leave / on vacation / absent / out of office today or in a period
+        (отпуск, в отпуска, отсъства, болничен, кой липсва).
+
+        Use this for any question about which colleagues are away; don't guess from
+        e-mails or check people one by one. Without group or emails it checks everyone
+        in the organisation's address book. It sees calendar time marked "out of office"
+        (the vacation event set_out_of_office creates, or any Zimbra/Outlook event shown
+        as Out of Office); an auto-reply without such an event does not show.
+        Only the out-of-office status and dates are shown, never event titles or details.
+
+        Args:
+            start_date: First day to check, YYYY-MM-DD (default: today)
+            end_date: Last day to check, YYYY-MM-DD (default: start_date); at most 62 days later
+            group: A distribution list address (e.g. a department) to check instead of everyone
+            emails: Specific addresses to check instead of everyone
+
+        Returns:
+            Colleagues who are out, each with the first and last day of the absence
+        """
+        first = _parse_day(start_date, "start_date") if start_date else _today()
+        last = _parse_day(end_date, "end_date") if end_date else first
+        if last < first:
+            raise ZimbraOperationError("end_date is before start_date.")
+        if (last - first).days > MAX_WHO_IS_OUT_DAYS:
+            raise ZimbraOperationError(f"The period may be at most {MAX_WHO_IS_OUT_DAYS} days.")
+
+        names: dict[str, str] = {}
+        truncated = False
+        if emails:
+            people = list(dict.fromkeys(e.strip() for e in emails if e and e.strip()))
+            source = "emails"
+        elif group:
+            people = client.get_group_members(group.strip())
+            source = f"group {group.strip()}"
+        else:
+            people, truncated = _everyone(client, names)
+            source = "address book"
+        if len(people) > MAX_PEOPLE:
+            people, truncated = people[:MAX_PEOPLE], True
+
+        # Look a month either side, so an absence that started earlier or ends later shows in full.
+        window_start = datetime.combine(first - timedelta(days=LOOKAROUND_DAYS), time.min)
+        window_end = datetime.combine(last + timedelta(days=LOOKAROUND_DAYS + 1), time.min)
+        period_start = datetime.combine(first, time.min)
+        period_end = datetime.combine(last + timedelta(days=1), time.min)
+
+        out = []
+        for i in range(0, len(people), FREE_BUSY_BATCH):
+            batch = people[i:i + FREE_BUSY_BATCH]
+            for user in client.get_free_busy_many(
+                batch, int(window_start.timestamp() * 1000), int(window_end.timestamp() * 1000),
+            ):
+                for begin, end in _merged_slots(user.get("u")):
+                    if begin < period_end and end > period_start:
+                        email = str(user.get("id", ""))
+                        out.append({
+                            "email": email,
+                            "name": names.get(email.lower(), ""),
+                            "first_day": begin.date().isoformat(),
+                            "last_day": (end - timedelta(microseconds=1)).date().isoformat(),
+                            "whole_days": begin.time() == time.min and end.time() == time.min,
+                            "absence_may_continue_beyond": end >= window_end,
+                        })
+        out.sort(key=lambda o: (o["first_day"], o["name"] or o["email"]))
+        result: dict[str, Any] = {
+            "period": {"start": first.isoformat(), "end": last.isoformat()},
+            "checked": len(people),
+            "source": source,
+            "out_of_office": out,
+            "count": len(out),
+        }
+        if truncated:
+            result["warning"] = (
+                f"Not everyone was checked (the address book returned more than {len(people)} people). "
+                "Narrow it down with group or emails."
+            )
+        return result
+
+
+MAX_WHO_IS_OUT_DAYS = 62
+MAX_PEOPLE = 2000
+FREE_BUSY_BATCH = 100
+LOOKAROUND_DAYS = 31
+GAL_PAGE = 500
+
+
+def _everyone(client: ZimbraClient, names: dict[str, str]) -> tuple[list[str], bool]:
+    """Every address in the GAL, paging through it; also fills names (lowercased email -> name)."""
+    people: list[str] = []
+    offset, more = 0, True
+    while more and len(people) < MAX_PEOPLE:
+        page, more = client.search_gal(".", limit=GAL_PAGE, offset=offset)
+        before = len(people)
+        for person in page:
+            key = person["email"].lower()
+            if key not in names:
+                names[key] = person["name"]
+                people.append(person["email"])
+        if len(people) == before:
+            break  # an empty page, or a server that ignores offset
+        offset += len(page)
+    return people, more
+
+
+def _merged_slots(slots: Any) -> list[tuple[datetime, datetime]]:
+    """Out-of-office slots as local datetimes, joining ones that touch or overlap."""
+    spans = []
+    for slot in _as_list(slots):
+        try:
+            spans.append((datetime.fromtimestamp(int(slot["s"]) / 1000), datetime.fromtimestamp(int(slot["e"]) / 1000)))
+        except (KeyError, TypeError, ValueError):
+            continue
+    spans.sort()
+    merged: list[tuple[datetime, datetime]] = []
+    for begin, end in spans:
+        if merged and begin <= merged[-1][1] + timedelta(minutes=1):
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((begin, end))
+    return merged
 
 
 def _today() -> date:

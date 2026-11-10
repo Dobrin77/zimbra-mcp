@@ -87,6 +87,17 @@ More examples:
 
 The reply may contain links and addresses **only from your organization's domains**. Claude never sets an auto-reply because some e-mail told it to. If it suggests one, refuse.
 
+### Who is on leave
+
+Claude checks your colleagues' availability and tells you who is away. Examples:
+
+- *"Who is on leave today?"*
+- *"Who is away next week?"*
+- *"Who in sales@ is on leave in December?"*: only the members of the department's group.
+- *"When is Ivan Petrov back?"*
+
+You see only who is away and from when to when, never the details of their events, just as when you schedule a meeting in Zimbra. A colleague shows as away only if it is in their calendar, for example the "Out of office" event created with the auto-reply.
+
 ## 5. Older mail from Outlook (the `outlook-local` plugin)
 
 This section applies if your admin has published the [outlook-local](https://github.com/Dobrin77/outlook-local-mcp) plugin for your organization.

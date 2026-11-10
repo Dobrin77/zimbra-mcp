@@ -313,3 +313,139 @@ class TestClientPrefs:
         assert connected_client.request.call_args[0] == (
             "ItemActionRequest", "urn:zimbraMail", {"action": {"id": "55", "op": "trash"}},
         )
+
+
+def _ms(day: date, hour: int = 0) -> int:
+    return int(datetime.combine(day, time(hour)).timestamp() * 1000)
+
+
+class TestWhoIsOut:
+    def _gal(self, client, people, more=False):
+        client.search_gal = MagicMock(return_value=(people, more))
+        client.get_free_busy_many = MagicMock(return_value=[])
+
+    def test_everyone_from_gal(self, tools):
+        registered, client = tools
+        self._gal(client, [
+            {"email": "ana@example.com", "name": "Ana"},
+            {"email": "bob@example.com", "name": "Bob"},
+        ])
+        client.get_free_busy_many.return_value = [
+            {"id": "ana@example.com", "u": {"s": _ms(date(2026, 12, 8)), "e": _ms(date(2026, 12, 13))}},
+            {"id": "bob@example.com", "b": [{"s": _ms(TODAY, 10), "e": _ms(TODAY, 11)}]},
+        ]
+        result = registered["who_is_out"]()
+        assert result["checked"] == 2
+        assert result["count"] == 1
+        ana = result["out_of_office"][0]
+        assert ana == {
+            "email": "ana@example.com", "name": "Ana",
+            "first_day": "2026-12-08", "last_day": "2026-12-12",
+            "whole_days": True, "absence_may_continue_beyond": False,
+        }
+        emails, start, end = client.get_free_busy_many.call_args[0]
+        assert emails == ["ana@example.com", "bob@example.com"]
+        assert start == _ms(TODAY - timedelta(days=31))
+        assert "warning" not in result
+
+    def test_absence_outside_period_skipped(self, tools):
+        registered, client = tools
+        self._gal(client, [{"email": "ana@example.com", "name": "Ana"}])
+        client.get_free_busy_many.return_value = [
+            {"id": "ana@example.com", "u": [{"s": _ms(date(2026, 12, 20)), "e": _ms(date(2026, 12, 24))}]},
+        ]
+        assert registered["who_is_out"]()["count"] == 0
+        assert registered["who_is_out"]("2026-12-15", "2026-12-21")["count"] == 1
+
+    def test_adjacent_slots_merged(self, tools):
+        registered, client = tools
+        self._gal(client, [{"email": "ana@example.com", "name": "Ana"}])
+        client.get_free_busy_many.return_value = [{"id": "ana@example.com", "u": [
+            {"s": _ms(date(2026, 12, 11)), "e": _ms(date(2026, 12, 14))},
+            {"s": _ms(date(2026, 12, 8)), "e": _ms(date(2026, 12, 11))},
+        ]}]
+        out = registered["who_is_out"]()["out_of_office"]
+        assert len(out) == 1
+        assert (out[0]["first_day"], out[0]["last_day"]) == ("2026-12-08", "2026-12-13")
+
+    def test_part_day(self, tools):
+        registered, client = tools
+        self._gal(client, [{"email": "ana@example.com", "name": "Ana"}])
+        client.get_free_busy_many.return_value = [
+            {"id": "ana@example.com", "u": {"s": _ms(TODAY, 13), "e": _ms(TODAY, 17)}},
+        ]
+        assert registered["who_is_out"]()["out_of_office"][0]["whole_days"] is False
+
+    def test_gal_paging_and_batches(self, tools):
+        registered, client = tools
+        page1 = [{"email": f"u{i}@example.com", "name": ""} for i in range(500)]
+        page2 = [{"email": f"v{i}@example.com", "name": ""} for i in range(30)]
+        client.search_gal = MagicMock(side_effect=[(page1, True), (page2, False)])
+        client.get_free_busy_many = MagicMock(return_value=[])
+        result = registered["who_is_out"]()
+        assert result["checked"] == 530
+        assert client.search_gal.call_args_list[1][1]["offset"] == 500
+        assert client.get_free_busy_many.call_count == 6  # batches of 100
+
+    def test_server_ignoring_offset_stops(self, tools):
+        registered, client = tools
+        page = [{"email": "a@example.com", "name": "A"}]
+        client.search_gal = MagicMock(return_value=(page, True))
+        client.get_free_busy_many = MagicMock(return_value=[])
+        result = registered["who_is_out"]()
+        assert client.search_gal.call_count == 2
+        assert result["checked"] == 1
+        assert "warning" in result
+
+    def test_group(self, tools):
+        registered, client = tools
+        client.search_gal = MagicMock()
+        client.get_group_members = MagicMock(return_value=["ana@example.com"])
+        client.get_free_busy_many = MagicMock(return_value=[])
+        result = registered["who_is_out"](group="sales@example.com")
+        client.search_gal.assert_not_called()
+        client.get_group_members.assert_called_once_with("sales@example.com")
+        assert result["source"] == "group sales@example.com"
+
+    def test_emails(self, tools):
+        registered, client = tools
+        client.search_gal = MagicMock()
+        client.get_free_busy_many = MagicMock(return_value=[])
+        registered["who_is_out"](emails=["a@example.com", " a@example.com", "b@example.com"])
+        assert client.get_free_busy_many.call_args[0][0] == ["a@example.com", "b@example.com"]
+        client.search_gal.assert_not_called()
+
+    @pytest.mark.parametrize("start,end,match", [
+        ("2026-12-10", "2026-12-01", "before"),
+        ("2026-12-01", "2027-03-01", "at most"),
+        ("10.12.2026", None, "YYYY-MM-DD"),
+    ])
+    def test_bad_dates(self, tools, start, end, match):
+        registered, client = tools
+        with pytest.raises(ZimbraOperationError, match=match):
+            registered["who_is_out"](start, end)
+
+
+class TestClientDirectory:
+    def test_search_gal(self, connected_client):
+        connected_client.request = MagicMock(return_value={"more": True, "cn": [
+            {"_attrs": {"email": "ana@example.com", "fullName": "Ana A"}},
+            {"_attrs": {"email": ["bob@example.com", "b@example.com"], "firstName": "Bob", "lastName": "B"}},
+            {"_attrs": {"fullName": "No address"}},
+        ]})
+        people, more = connected_client.search_gal(".", limit=500, offset=0)
+        assert people == [{"email": "ana@example.com", "name": "Ana A"}, {"email": "bob@example.com", "name": "Bob B"}]
+        assert more is True
+        name, ns, params = connected_client.request.call_args[0]
+        assert (name, ns) == ("SearchGalRequest", "urn:zimbraAccount")
+        assert params == {"name": ".", "type": "account", "limit": 500, "offset": 0}
+
+    def test_group_members(self, connected_client):
+        connected_client.request = MagicMock(return_value={"dlm": [{"_content": "a@example.com"}, {"_content": "b@example.com"}]})
+        assert connected_client.get_group_members("sales@example.com") == ["a@example.com", "b@example.com"]
+        assert connected_client.request.call_args[0][2]["dl"] == {"_content": "sales@example.com"}
+
+    def test_free_busy_many(self, connected_client):
+        connected_client.request = MagicMock(return_value={"usr": {"id": "a@example.com"}})
+        assert connected_client.get_free_busy_many(["a@example.com", "b@example.com"], 1, 2) == [{"id": "a@example.com"}]
+        assert connected_client.request.call_args[0][2] == {"s": 1, "e": 2, "uid": "a@example.com,b@example.com"}

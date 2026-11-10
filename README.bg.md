@@ -24,7 +24,7 @@ Claude ──HTTPS + OAuth──▶ Caddy (mcp.example.com:443) ──▶ zimbra
 
 | Поща | Календар | Контакти | Тагове |
 |---|---|---|---|
-| search_emails, get_email, get_attachment, list_folders, search_folder, move_emails, mark_as_read, delete_emails (в кошчето), create_draft, send_email, list_send_identities (изпращане от общ адрес с правото Send As в Zimbra) | get_calendar_events, get_event_details, create_event, get_free_busy, get_out_of_office, set_out_of_office, disable_out_of_office (автоматичен отговор при отсъствие със събитие „Отпуск“) | search_contacts, get_contact, create_contact, update_contact, delete_contact | list_tags, create_tag, delete_tag, add_tag_to_emails, remove_tag_from_emails |
+| search_emails, get_email, get_attachment, list_folders, search_folder, move_emails, mark_as_read, delete_emails (в кошчето), create_draft, send_email, list_send_identities (изпращане от общ адрес с правото Send As в Zimbra) | get_calendar_events, get_event_details, create_event, get_free_busy, get_out_of_office, set_out_of_office, disable_out_of_office (автоматичен отговор при отсъствие със събитие „Отпуск“), who_is_out (кой е в отпуск) | search_contacts, get_contact, create_contact, update_contact, delete_contact | list_tags, create_tag, delete_tag, add_tag_to_emails, remove_tag_from_emails |
 
 ## Календарът в Outlook (CalDAV шлюз)
 

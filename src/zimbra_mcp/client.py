@@ -35,6 +35,18 @@ def _as_list(value: Any) -> list:
     return value if isinstance(value, list) else [value]
 
 
+def _gal_person(cn: dict[str, Any]) -> dict[str, str] | None:
+    """Email and display name of a GAL entry; its fields come as an "_attrs" object."""
+    attrs = cn.get("_attrs") or {}
+    email = attrs.get("email")
+    if isinstance(email, list):
+        email = email[0] if email else None
+    if not email:
+        return None
+    name = attrs.get("fullName") or " ".join(filter(None, [attrs.get("firstName"), attrs.get("lastName")]))
+    return {"email": str(email), "name": str(name or "")}
+
+
 class ZimbraClient:
     """Client for the Zimbra SOAP API, acting as one user via domain preauth."""
 
@@ -670,6 +682,32 @@ class ZimbraClient:
             "uid": email,
         }
         return self.request("GetFreeBusyRequest", "urn:zimbraMail", params)
+
+    def get_free_busy_many(self, emails: list[str], start_time: int, end_time: int) -> list[dict[str, Any]]:
+        """Free/busy of several users in one request; one "usr" entry per address."""
+        params = {"s": start_time, "e": end_time, "uid": ",".join(emails)}
+        return _as_list(self.request("GetFreeBusyRequest", "urn:zimbraMail", params).get("usr"))
+
+    def search_gal(self, name: str = ".", limit: int = 500, offset: int = 0) -> tuple[list[dict[str, str]], bool]:
+        """People in the organisation's address book (GAL), as the user sees it.
+
+        "." matches everyone. Returns [{"email", "name"}] and whether more entries remain.
+        """
+        params = {"name": name, "type": "account", "limit": limit, "offset": offset}
+        response = self.request("SearchGalRequest", "urn:zimbraAccount", params)
+        people = [_gal_person(cn) for cn in _as_list(response.get("cn"))]
+        return [p for p in people if p], bool(response.get("more"))
+
+    def get_group_members(self, group: str) -> list[str]:
+        """Addresses in a distribution list (department group) the user may see."""
+        params = {"dl": {"_content": group}, "limit": 1000}
+        response = self.request("GetDistributionListMembersRequest", "urn:zimbraAccount", params)
+        members = []
+        for m in _as_list(response.get("dlm")):
+            value = m.get("_content") if isinstance(m, dict) else m
+            if value:
+                members.append(str(value))
+        return members
 
     def search_contacts(
         self,
