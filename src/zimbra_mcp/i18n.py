@@ -70,6 +70,27 @@ MESSAGES: dict[str, dict[str, str]] = {
             "A calendar sync token ({label}) was created for the account {email}.\n\n"
             "If this was not you, tell the IT department immediately."
         ),
+        "ooo_event_name": "Out of office",
+        "ooo_date_format": "%Y-%m-%d",
+        "ooo_on_subject": "Your out-of-office auto-reply is on",
+        "ooo_on_text": (
+            "An out-of-office auto-reply was set through Claude for the account {email}.\n\n"
+            "Period: {period}\n"
+            "After the last day Zimbra stops replying by itself.\n\n"
+            "Reply text:\n{reply}\n\n"
+            "Senders outside the organisation: {external}\n\n"
+            "An \"Out of office\" event for the same days was added to your calendar.\n\n"
+            "To change or switch off the auto-reply, ask Claude.\n"
+            "If this was not you, tell the IT department immediately.\n"
+        ),
+        "ooo_external_same": "get the same reply.",
+        "ooo_external_none": "get no reply.",
+        "ooo_external_different": "get this reply:\n{text}",
+        "ooo_off_subject": "Your out-of-office auto-reply is off",
+        "ooo_off_text": (
+            "The out-of-office auto-reply for the account {email} was switched off through Claude.\n\n"
+            "If this was not you, tell the IT department immediately.\n"
+        ),
         "unnamed": "unnamed",
         "send_note_enabled": "Claude will be able to send mail on your behalf, but only after showing you the text and you confirm it.",
         "send_note_disabled": "No mail will be sent automatically – drafts only.",
@@ -200,6 +221,27 @@ MESSAGES: dict[str, dict[str, str]] = {
         "mail_token_text": (
             "За акаунта {email} е създаден токен за синхронизиране на календара ({label}).\n\n"
             "Ако не сте били вие, съобщете веднага на ИТ отдела."
+        ),
+        "ooo_event_name": "Отпуск",
+        "ooo_date_format": "%d.%m.%Y",
+        "ooo_on_subject": "Автоматичният отговор при отсъствие е включен",
+        "ooo_on_text": (
+            "За акаунта {email} чрез Claude е зададен автоматичен отговор при отсъствие.\n\n"
+            "Период: {period}\n"
+            "След последния ден Zimbra спира да отговаря сама.\n\n"
+            "Текст на отговора:\n{reply}\n\n"
+            "Податели извън организацията: {external}\n\n"
+            "В календара ви е добавено събитие „Отпуск“ за същите дни.\n\n"
+            "За да го промените или изключите, кажете на Claude.\n"
+            "Ако не сте били вие, съобщете веднага на ИТ отдела.\n"
+        ),
+        "ooo_external_same": "получават същия отговор.",
+        "ooo_external_none": "не получават отговор.",
+        "ooo_external_different": "получават този отговор:\n{text}",
+        "ooo_off_subject": "Автоматичният отговор при отсъствие е изключен",
+        "ooo_off_text": (
+            "Автоматичният отговор при отсъствие за акаунта {email} беше изключен чрез Claude.\n\n"
+            "Ако не сте били вие, съобщете веднага на ИТ отдела.\n"
         ),
         "unnamed": "без име",
         "send_note_enabled": "Claude ще може да изпраща писма от ваше име, но само след като ви покаже текста и го потвърдите.",

@@ -580,6 +580,74 @@ class ZimbraClient:
         params = {"m": {"inv": inv, "su": subject}}
         return self.request("CreateAppointmentRequest", "urn:zimbraMail", params)
 
+    def get_prefs(self, names: list[str]) -> dict[str, str]:
+        """The user's own preferences (zimbraPref*), by name; unset ones are left out.
+
+        In Zimbra's JSON protocol name/value pairs travel as an "_attrs" object.
+        """
+        response = self.request("GetPrefsRequest", "urn:zimbraAccount", {"pref": [{"name": n} for n in names]})
+        attrs = response.get("_attrs") or {}
+        wanted = set(names)
+        prefs = {}
+        for name, value in attrs.items():
+            if name in wanted:
+                prefs[name] = value[0] if isinstance(value, list) else str(value)
+        return prefs
+
+    def modify_prefs(self, prefs: dict[str, str]) -> dict[str, Any]:
+        """Change the user's own preferences; Zimbra allows only user-modifiable ones.
+
+        They must go as an "_attrs" object: a list of <pref> elements is silently ignored in JSON.
+        """
+        self.request("ModifyPrefsRequest", "urn:zimbraAccount", {"_attrs": dict(prefs)})
+        stored = self.get_prefs(list(prefs))
+        def same(a: str, b: str) -> bool:
+            return " ".join(a.split()).casefold() == " ".join(b.split()).casefold()
+
+        lost = sorted(name for name, value in prefs.items() if not same(stored.get(name, ""), value))
+        if lost:
+            raise ZimbraOperationError(f"Zimbra did not save the preferences: {', '.join(lost)}")
+        return stored
+
+    def create_all_day_event(
+        self,
+        subject: str,
+        first_day: str,
+        last_day: str,
+        uid: str,
+        description: str = "",
+        free_busy: str = "B",
+    ) -> dict[str, Any]:
+        """Create an all-day event in the user's calendar, without attendees.
+
+        Args:
+            subject: Event title
+            first_day: First day, YYYYMMDD
+            last_day: Last day (inclusive), YYYYMMDD
+            uid: iCalendar UID, so the event can be found again
+            description: Plain-text description
+            free_busy: B (busy), O (out of office), T (tentative) or F (free)
+        """
+        comp = {
+            "name": subject,
+            "uid": uid,
+            "allDay": "1",
+            "fb": free_busy,
+            "fba": free_busy,
+            "transp": "O",
+            "class": "PUB",
+            "s": {"d": first_day},
+            "e": {"d": last_day},
+        }
+        message: dict[str, Any] = {"inv": {"comp": comp}, "su": subject}
+        if description:
+            message["mp"] = {"ct": "text/plain", "content": description}
+        return self.request("CreateAppointmentRequest", "urn:zimbraMail", {"m": message})
+
+    def trash_item(self, item_id: str) -> dict[str, Any]:
+        """Move a calendar item (or any item) to the Trash."""
+        return self.request("ItemActionRequest", "urn:zimbraMail", {"action": {"id": item_id, "op": "trash"}})
+
     def get_free_busy(
         self,
         email: str,

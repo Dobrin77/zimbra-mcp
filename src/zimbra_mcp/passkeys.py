@@ -20,9 +20,6 @@ import json
 import logging
 import secrets
 import time
-from email.message import EmailMessage
-from email.policy import SMTP
-from email.utils import formatdate, make_msgid
 from importlib.resources import files
 
 import anyio.to_thread
@@ -49,6 +46,7 @@ from zimbra_mcp.config import Settings
 from zimbra_mcp.directory import AccountDirectory
 from zimbra_mcp.i18n import js_strings, page_translator, translator
 from zimbra_mcp.net import RateLimiter, client_ip, in_networks
+from zimbra_mcp.notices import notice_mime
 from zimbra_mcp.oauth import ZimbraOAuthProvider
 from zimbra_mcp.storage import Storage, token_hash
 from zimbra_mcp.theme import Theme
@@ -573,17 +571,10 @@ class PasskeyPages:
 
     async def _deliver(self, email: str, subject: str, text: str) -> None:
         """Put a notice straight into the user's Inbox (never leaves the Zimbra server)."""
-        domain = email.rsplit("@", 1)[1]
-        msg = EmailMessage()
-        msg["From"] = f"{self.theme.org_name} Claude <no-reply@{domain}>"
-        msg["To"] = email
-        msg["Subject"] = subject
-        msg["Date"] = formatdate(localtime=True)
-        msg["Message-ID"] = make_msgid(domain=self.settings.public_host or domain)
-        msg.set_content(text)
+        raw = notice_mime(self.theme.org_name, email, subject, text, self.settings.public_host)
         try:
             client = self.pool.get(email)
-            await anyio.to_thread.run_sync(client.add_message, msg.as_string(policy=SMTP))
+            await anyio.to_thread.run_sync(client.add_message, raw)
         except Exception:
             logger.exception("Could not deliver notice to %s", email)
 

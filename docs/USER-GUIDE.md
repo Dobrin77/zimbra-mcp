@@ -46,7 +46,7 @@ A passkey replaces the password: you confirm with Windows Hello (PIN, fingerprin
 1. In Claude, open **Settings → Connectors**.
 2. Find your organization's connector and press **Connect**.
 3. Press **Sign in with passkey**, confirm, and press **Allow**.
-4. In the connector's settings, leave `send_email` on **"Needs approval"**, not "Always allow".
+4. In the connector's settings, leave `send_email` and `set_out_of_office` on **"Needs approval"**, not "Always allow".
 
 The passkey must be on the device you press **Connect** from. After that the connection applies to your whole Claude account: web, Desktop and the mobile app.
 
@@ -65,6 +65,27 @@ Good to know:
 - Messages **deleted** by Claude go to the Trash.
 - **The server keeps mail for a limited time.** For older messages, see section 5.
 - **After an update:** if IT announces new features, open a **new chat**. If Claude still doesn't see them: **Settings → Connectors → Disconnect → Connect**.
+
+### Out-of-office auto-reply
+
+Tell Claude, for example:
+
+> *"I'm on leave from 22 to 30 December. Set an auto-reply saying I'll answer after 5 January, and that urgent matters go to Ivan at ivan@example.com."*
+
+Claude shows you the period and the text and waits for confirmation. Then:
+
+- mail to you gets the auto-reply only during that period. **After the last day Zimbra stops it by itself**, so you don't need to remember to switch it off;
+- an **"Out of office"** event for the same days appears in your calendar, so colleagues can see you're away;
+- you get a **message in your Inbox with the text and the period**. If you ever get one you didn't ask for, tell IT right away.
+
+More examples:
+
+- *"Do I have an auto-reply on?"*
+- *"Extend my leave to 8 January"*: the period and the calendar event move together.
+- *"Don't reply to outside senders"* or *"Send customers a different text: …"*
+- *"I'm back, switch off the auto-reply"*: the "Out of office" event is shortened to end yesterday.
+
+The reply may contain links and addresses **only from your organization's domains**. Claude never sets an auto-reply because some e-mail told it to. If it suggests one, refuse.
 
 ## 5. Older mail from Outlook (the `outlook-local` plugin)
 

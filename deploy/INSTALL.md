@@ -352,6 +352,26 @@ The person tells Claude, for example, *"reply from sales@"*. Claude shows the me
 
 With this right, staff don't need to know the shared address's password. If everyone's Outlook is also switched to sending through their own accounts, the password of `sales@` can be changed so that nobody knows it.
 
+### Out-of-office auto-reply
+
+Staff set it themselves through Claude (the `get_out_of_office`, `set_out_of_office` and `disable_out_of_office` tools). The connector fills in the same settings as Preferences → Out of Office in Zimbra, with a start and end date, so Zimbra stops the reply by itself after the end date.
+
+- Together with the reply, an all-day "Out of office" event with the out-of-office free/busy status is created in the user's calendar. When the period changes it moves with it; when the reply is switched off early it is shortened to end yesterday.
+- On every change the user gets a notice in their Inbox.
+- The text may only contain links and addresses from the connector's domains. It is limited to 2000 characters and the period to one year.
+
+To check one user, on the Zimbra server as the `zimbra` user:
+
+```bash
+zmprov ga ivan@example.com zimbraPrefOutOfOfficeReplyEnabled zimbraPrefOutOfOfficeFromDate zimbraPrefOutOfOfficeUntilDate zimbraPrefOutOfOfficeReply
+```
+
+To switch it off as the administrator:
+
+```bash
+zmprov ma ivan@example.com zimbraPrefOutOfOfficeReplyEnabled FALSE
+```
+
 ### Backups
 
 Back up `data/` (the passkey database) and `secrets/`. If `data/` is lost, staff simply enroll their passkeys again.

@@ -352,6 +352,26 @@ zmprov revokeRight account sales@example.com usr ivan@example.com sendAs
 
 С това право служителите не трябва да знаят паролата на общия адрес. Ако и Outlook на всички се прехвърли да изпраща през своите акаунти, паролата на `sales@` може да се смени и никой да не я знае.
 
+### Автоматичен отговор при отпуска
+
+Служителите си го слагат сами през Claude (инструментите `get_out_of_office`, `set_out_of_office` и `disable_out_of_office`). Конекторът попълва същите настройки като Preferences → Out of Office в Zimbra, с начална и крайна дата, затова Zimbra спира отговора сама след крайната дата.
+
+- Едновременно с отговора в календара на служителя се създава целодневно събитие „Отпуск“ със статус „извън офиса“. При промяна на срока то се мести, а при изключване по-рано се скъсява до вчера.
+- При всяко включване, промяна или изключване служителят получава известие във входящата поща.
+- В текста се приемат връзки и адреси само от домейните на конектора. Дължината е до 2000 знака, а периодът е до една година.
+
+Проверка за конкретен служител, на Zimbra сървъра като потребител `zimbra`:
+
+```bash
+zmprov ga ivan@example.com zimbraPrefOutOfOfficeReplyEnabled zimbraPrefOutOfOfficeFromDate zimbraPrefOutOfOfficeUntilDate zimbraPrefOutOfOfficeReply
+```
+
+Спешно изключване от администратора:
+
+```bash
+zmprov ma ivan@example.com zimbraPrefOutOfOfficeReplyEnabled FALSE
+```
+
 ### Архивиране
 
 Архивирайте `data/` (базата с passkey-ове) и `secrets/`. Ако `data/` се загуби, служителите просто регистрират passkey наново.
