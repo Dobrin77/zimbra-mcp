@@ -18,6 +18,7 @@ Claude ──HTTPS + OAuth──▶ Caddy (mcp.example.com:443) ──▶ zimbra
 - **LDAP.** Every active Zimbra account can use it. A suspended or deleted account loses access within 5 minutes.
 - **Sending only after confirmation.** Claude shows the message (recipients, subject, body) in the chat and sends only after the user confirms. No copy is kept in Sent, which saves space; instead the sender gets a BCC copy in their Inbox (useful when Outlook uses POP3). Recipients and subject are written to the server log. With `ZIMBRA_ENABLE_SEND=false` Claude only writes drafts. Permanent deletion is disabled; deleted messages go to the Trash.
 - **Passkey enrollment** is only possible from the internal network, with a one-time code delivered straight to the user's Inbox. Staff outside the office get a personal one-time invite from the admin by phone or SMS. It replaces the internal-network requirement, but not the code from the mailbox.
+- **Usage counts, not content.** To show whether the connector is really used, the server counts tool calls per person, day and tool group (mail, sending, calendar, out of office, contacts, tags). It keeps no questions, mail, subjects or recipients, and deletes counts after 13 weeks. `zimbra-mcp-admin usage` prints a weekly report. Tell your staff about it, as your privacy rules require.
 - **Web UI language.** The sign-in, enrollment, invite and calendar pages are available in English (default) and Bulgarian, selected with `UI_LANG`.
 
 ## Tools

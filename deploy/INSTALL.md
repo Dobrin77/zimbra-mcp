@@ -323,6 +323,39 @@ docker compose exec zimbra-mcp zimbra-mcp-admin logout ivan@example.com
 
 **Suspending an account in Zimbra** also cuts off access through Claude within 5 minutes, with nothing to do here.
 
+### Usage report
+
+**Purpose:** to see whether people really use the connector, and who might need help. For example, the report can go to management each week next to Claude's own usage analytics (Admin → Analytics). Those show how much each person uses Claude at all; this shows how much of that is work with their mail and calendar.
+
+**What is counted:** every tool call adds one to a counter per person, day and tool group. Nothing else is kept: no questions, mail, subjects or recipients. Counts are deleted after 13 weeks. Recording never makes a tool call fail.
+
+```bash
+# The last 7 days as a table
+docker compose exec zimbra-mcp zimbra-mcp-admin usage
+
+# An exact week (Monday to Sunday), as CSV for Excel
+docker compose exec -T zimbra-mcp zimbra-mcp-admin usage --from 2026-11-16 --to 2026-11-22 --csv > usage.csv
+
+# From a date to today, or the last N days (up to 91)
+docker compose exec zimbra-mcp zimbra-mcp-admin usage --from 2026-11-16
+docker compose exec zimbra-mcp zimbra-mcp-admin usage --days 30
+```
+
+| Column | Counts |
+|---|---|
+| `active_days` | days in the period with any use |
+| `total` | all tool calls |
+| `mail` | searching, reading, moving, marking and deleting mail |
+| `send` | sending, drafts, send-from addresses |
+| `calendar` | calendar, events, free/busy |
+| `out_of_office` | auto-reply and who is on leave |
+| `contacts`, `tags` | contacts and tags |
+| `last_day` | the last day with any use |
+
+Everyone with a passkey is listed, with zeros if they did not use it. One tool call is not one question: Claude often calls two or three tools for one answer, so compare people with each other rather than with a message count.
+
+**Privacy:** this is a record of how employees use a work tool. Tell your staff about it, for example with one sentence in the user guide, as your data-protection rules and employment contracts require.
+
 ### Sending from a shared department address
 
 Staff can also send through Claude from a shared address, e.g. `sales@example.com`, if they have the **Send As** right in Zimbra. Rights are granted only in Zimbra and the connector reads them from there. Zimbra checks them again on every send.

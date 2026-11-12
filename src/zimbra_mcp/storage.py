@@ -85,7 +85,18 @@ CREATE TABLE IF NOT EXISTS dav_tokens (
     last_used_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS dav_tokens_email ON dav_tokens(email);
+CREATE TABLE IF NOT EXISTS usage (
+    email TEXT NOT NULL,
+    day TEXT NOT NULL,
+    tool_group TEXT NOT NULL,
+    calls INTEGER NOT NULL,
+    PRIMARY KEY (email, day, tool_group)
+);
+CREATE INDEX IF NOT EXISTS usage_day ON usage(day);
 """
+
+# How long the per-day usage counts are kept (13 weeks).
+USAGE_KEEP_DAYS = 91
 
 
 UNUSED_CLIENT_TTL = 24 * 3600
@@ -381,3 +392,22 @@ class Storage:
 
     def delete_dav_tokens_for(self, email: str) -> int:
         return self._exec("DELETE FROM dav_tokens WHERE email = ?", (email,)).rowcount
+
+    # Usage: how many tool calls each person made per day and tool group. Counts only,
+    # never what was asked or which mail was touched.
+
+    def record_usage(self, email: str, tool_group: str, day: str) -> None:
+        self._exec(
+            "INSERT INTO usage (email, day, tool_group, calls) VALUES (?, ?, ?, 1) "
+            "ON CONFLICT (email, day, tool_group) DO UPDATE SET calls = calls + 1",
+            (email, day, tool_group),
+        )
+
+    def purge_usage(self, before_day: str) -> int:
+        return self._exec("DELETE FROM usage WHERE day < ?", (before_day,)).rowcount
+
+    def usage_since(self, first_day: str, last_day: str = "9999-12-31") -> list[sqlite3.Row]:
+        return self._all(
+            "SELECT email, day, tool_group, calls FROM usage WHERE day >= ? AND day <= ? ORDER BY email, day",
+            (first_day, last_day),
+        )

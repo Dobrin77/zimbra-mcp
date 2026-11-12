@@ -245,6 +245,9 @@ def test_full_flow_routes_tool_calls_to_the_signed_in_user(env):
     assert "Писмо за maria@example.com" in json.dumps(result, ensure_ascii=False)
     # Each mailbox was reached with the preauth key, as its own user.
     assert mailboxes["ivan@example.com"].config.preauth_key == "0123456789abcdef"
+    # Each call was counted for its own user, as a count only.
+    counted = {(r["email"], r["tool_group"]): r["calls"] for r in store.usage_since("2000-01-01")}
+    assert counted == {("ivan@example.com", "mail"): 1, ("maria@example.com", "mail"): 1}
 
 
 def test_mcp_requires_a_token(env):

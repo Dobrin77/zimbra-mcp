@@ -4,9 +4,11 @@ Run inside the container, e.g.:
     docker compose exec zimbra-mcp zimbra-mcp-admin list
     docker compose exec zimbra-mcp zimbra-mcp-admin revoke user@example.com
     docker compose exec zimbra-mcp zimbra-mcp-admin invite user@example.com
+    docker compose exec zimbra-mcp zimbra-mcp-admin usage --days 7 --csv > usage.csv
 """
 
 import argparse
+import csv
 import os
 import re
 import secrets
@@ -14,7 +16,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from zimbra_mcp.storage import Storage
+from zimbra_mcp.storage import USAGE_KEEP_DAYS, Storage
+from zimbra_mcp.usage import GROUPS, report_period, usage_report
 
 DEFAULT_INVITE_HOURS = 72
 
@@ -90,6 +93,11 @@ def main(argv: list[str] | None = None) -> int:
         "dav-revoke", help="stop calendar tokens: one by its ID (see 'dav-tokens') or all of an account"
     )
     dav_revoke.add_argument("target", metavar="id|email")
+    usage = sub.add_parser("usage", help="how often each person used the connector (counts only)")
+    usage.add_argument("--days", type=int, help="how many days back, today included (default 7, max 91)")
+    usage.add_argument("--from", dest="start", metavar="YYYY-MM-DD", help="first day, e.g. a Monday")
+    usage.add_argument("--to", dest="end", metavar="YYYY-MM-DD", help="last day, included (default today)")
+    usage.add_argument("--csv", action="store_true", help="print CSV for Excel instead of a table")
     args = parser.parse_args(argv)
 
     store = Storage(Path(args.data_dir) / "zimbra-mcp.sqlite3")
@@ -154,7 +162,36 @@ def main(argv: list[str] | None = None) -> int:
             print("Removed." if ok else "No such calendar token.")
             return 0 if ok else 1
         print(f"Removed {store.delete_dav_tokens_for(args.target.lower())} calendar token(s).")
+    elif args.command == "usage":
+        if args.days is not None and not 1 <= args.days <= USAGE_KEEP_DAYS:
+            parser.error(f"--days must be between 1 and {USAGE_KEEP_DAYS}")
+        if args.days is not None and args.start:
+            parser.error("use either --days or --from, not both")
+        try:
+            first, last = report_period(args.days, args.start, args.end)
+        except ValueError as e:
+            parser.error(str(e))
+        people = sorted({p.email for p in store.all_passkeys()})
+        print_usage(usage_report(store, first, last, people), first, last, args.csv)
     return 0
+
+
+def print_usage(report: list[dict], first, last, as_csv: bool) -> None:
+    days = (last - first).days + 1
+    columns = ["email", "active_days", "total", *GROUPS, "last_day"]
+    if as_csv:
+        writer = csv.writer(sys.stdout, lineterminator="\n")
+        writer.writerow(columns)
+        for row in report:
+            writer.writerow([row[c] for c in columns])
+        return
+    print(f"Connector use {first} .. {last} ({days} days), registered people included even with no use:")
+    print(f"  {'email':<35} {'days':>4} {'total':>6}  " + " ".join(f"{g[:8]:>8}" for g in GROUPS) + "  last")
+    for row in report:
+        print(f"  {row['email']:<35} {row['active_days']:>4} {row['total']:>6}  "
+              + " ".join(f"{row[g]:>8}" for g in GROUPS) + f"  {row['last_day'] or '-'}")
+    used = sum(1 for row in report if row["total"])
+    print(f"\n{used} of {len(report)} people used it.")
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ from zimbra_mcp.tools import (
     register_out_of_office_tools,
     register_tag_tools,
 )
+from zimbra_mcp.usage import UsageCounter
 from zimbra_mcp.usercontext import ClientPool, CurrentUserClient
 
 logging.basicConfig(level=logging.INFO)
@@ -81,6 +82,8 @@ def create_server(
         enable_send=settings.enable_send,
         allow_hard_delete=settings.allow_hard_delete,
     )
+    # Count tool calls per person and group for the weekly usage report (counts only).
+    UsageCounter(store).install(mcp)
     register_email_tools(mcp, client, tool_config)
     register_tag_tools(mcp, client)
     register_calendar_tools(mcp, client)
