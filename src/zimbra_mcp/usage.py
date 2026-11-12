@@ -24,6 +24,8 @@ TOOL_GROUPS: dict[str, tuple[str, ...]] = {
     "calendar": ("get_calendar_events", "get_event_details", "create_event", "get_free_busy"),
     "out_of_office": ("get_out_of_office", "set_out_of_office", "disable_out_of_office", "who_is_out"),
     "contacts": ("search_contacts", "get_contact", "create_contact", "update_contact", "delete_contact"),
+    "lists": ("list_my_distribution_lists", "get_distribution_list_members", "compare_distribution_list",
+              "update_distribution_list"),
     "tags": ("list_tags", "create_tag", "delete_tag", "add_tag_to_emails", "remove_tag_from_emails"),
 }
 GROUPS = (*TOOL_GROUPS, "other")

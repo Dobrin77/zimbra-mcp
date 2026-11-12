@@ -98,6 +98,17 @@ Claude checks your colleagues' availability and tells you who is away. Examples:
 
 You see only who is away and from when to when, never the details of their events, just as when you schedule a meeting in Zimbra. A colleague shows as away only if it is in their calendar, for example the "Out of office" event created with the auto-reply.
 
+### Distribution lists (for the people who keep them)
+
+If you keep a list such as staff@ or management@, IT makes you its **owner**. Then tell Claude, for example:
+
+- *"Which lists do I keep?"*
+- *"Who is in staff@example.com?"*
+- *"Compare staff@example.com with our staff and tell me who is missing"*: Claude shows who in the address book is not on the list and which addresses on the list no longer exist. Addresses in other mail domains are not in this address book, so check those yourself. You decide whom to add.
+- *"Add Ivan Petrov and Maria Ivanova to staff@, remove Petar Georgiev"*
+
+Claude shows the change and waits for your confirmation. After every change you get a message listing what was added and removed. Only a list's owners can change it.
+
 ## 5. Older mail from Outlook (the `outlook-local` plugin)
 
 This section applies if your admin has published the [outlook-local](https://github.com/Dobrin77/outlook-local-mcp) plugin for your organization.

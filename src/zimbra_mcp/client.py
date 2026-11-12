@@ -44,7 +44,11 @@ def _gal_person(cn: dict[str, Any]) -> dict[str, str] | None:
     if not email:
         return None
     name = attrs.get("fullName") or " ".join(filter(None, [attrs.get("firstName"), attrs.get("lastName")]))
-    return {"email": str(email), "name": str(name or "")}
+    person = {"email": str(email), "name": str(name or "")}
+    for field in ("company", "department"):
+        if attrs.get(field):
+            person[field] = str(attrs[field])
+    return person
 
 
 class ZimbraClient:
@@ -708,6 +712,26 @@ class ZimbraClient:
             if value:
                 members.append(str(value))
         return members
+
+    def owned_distribution_lists(self) -> list[dict[str, str]]:
+        """Distribution lists the user owns (and may therefore change)."""
+        response = self.request(
+            "GetAccountDistributionListsRequest", "urn:zimbraAccount", {"ownerOf": 1, "memberOf": "none"}
+        )
+        lists = []
+        for dl in _as_list(response.get("dl")):
+            if dl.get("name") and str(dl.get("isOwner", "1")).lower() in ("1", "true"):
+                lists.append({"name": str(dl["name"]), "display_name": str(dl.get("d", ""))})
+        return lists
+
+    def change_group_members(self, group: str, add: list[str], remove: list[str]) -> None:
+        """Add and remove members of a distribution list; Zimbra allows it only to the list's owners."""
+        for op, addresses in (("addMembers", add), ("removeMembers", remove)):
+            if addresses:
+                self.request("DistributionListActionRequest", "urn:zimbraAccount", {
+                    "dl": {"by": "name", "_content": group},
+                    "action": {"op": op, "dlm": [{"_content": a} for a in addresses]},
+                })
 
     def search_contacts(
         self,

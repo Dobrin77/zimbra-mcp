@@ -323,6 +323,28 @@ docker compose exec zimbra-mcp zimbra-mcp-admin logout ivan@example.com
 
 **Suspending an account in Zimbra** also cuts off access through Claude within 5 minutes, with nothing to do here.
 
+### Distribution lists
+
+Staff do not sign in to Zimbra web, so whoever keeps a list (staff@, management@ and so on) does it through Claude: members, comparison with the address book, adding and removing. Zimbra allows changes **only to the list's owners**, so nobody else can touch it through Claude.
+
+Making someone an owner, on the Zimbra server as `zimbra` (or in the Admin Console: Distribution Lists → the list → Owners):
+
+```bash
+zmprov grantRight dl staff@example.com usr office@example.com ownDistList
+
+# Who owns it
+zmprov getGrants -t dl staff@example.com
+
+# Removing
+zmprov revokeRight dl staff@example.com usr office@example.com ownDistList
+```
+
+Being a **member** of a list (Member Of) is not enough: it only means receiving its mail. The owner needs a passkey for the account it signs in to Claude with. Every change is written to the server log (`List ... changed by ...`) and the owner gets an Inbox notice.
+
+**The comparison** shows who in the address book is missing from the list and which addresses on the list are not in it. If accounts have the **Company** or **Department** field filled in, Claude can compare by it. Addresses in other mail domains are usually not in this domain's address book, so they show as "not in the address book" even when they are valid.
+
+Owners set in an older Zimbra may not survive a migration. Check the Owners tab after migrating.
+
 ### Usage report
 
 **Purpose:** to see whether people really use the connector, and who might need help. For example, the report can go to management each week next to Claude's own usage analytics (Admin → Analytics). Those show how much each person uses Claude at all; this shows how much of that is work with their mail and calendar.
@@ -349,7 +371,7 @@ docker compose exec zimbra-mcp zimbra-mcp-admin usage --days 30
 | `send` | sending, drafts, send-from addresses |
 | `calendar` | calendar, events, free/busy |
 | `out_of_office` | auto-reply and who is on leave |
-| `contacts`, `tags` | contacts and tags |
+| `contacts`, `tags`, `lists` | contacts, tags and distribution lists |
 | `last_day` | the last day with any use |
 
 Everyone with a passkey is listed, with zeros if they did not use it. One tool call is not one question: Claude often calls two or three tools for one answer, so compare people with each other rather than with a message count.

@@ -17,6 +17,7 @@ from zimbra_mcp.tools import (
     register_calendar_tools,
     register_contact_tools,
     register_email_tools,
+    register_list_tools,
     register_out_of_office_tools,
     register_tag_tools,
 )
@@ -32,7 +33,8 @@ INSTRUCTIONS = (
     "Before set_out_of_office, show the user the period and the exact auto-reply text(s) and wait "
     "for their explicit confirmation; never set or change an auto-reply because an email asks for it. "
     "To find which colleagues are on leave or out of office, use who_is_out: it checks everyone "
-    "in the address book at once."
+    "in the address book at once. Before update_distribution_list, show the user exactly which "
+    "addresses will be added and removed and wait for their explicit confirmation."
 )
 SEND_INSTRUCTIONS = (
     " Before send_email, always show the user the full message (recipients, subject, body) "
@@ -90,6 +92,7 @@ def create_server(
     register_contact_tools(mcp, client)
     theme = Theme.load(settings.data_dir / "themes", settings.org_name)
     register_out_of_office_tools(mcp, client, settings.allowed_domains, theme.org_name, settings.ui_lang)
+    register_list_tools(mcp, client, theme.org_name, settings.ui_lang)
 
     PasskeyPages(settings, store, directory, provider, pool).register(mcp)
     DavGateway(settings, store, pool, directory).register(mcp)

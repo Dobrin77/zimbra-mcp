@@ -86,6 +86,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "ooo_external_same": "get the same reply.",
         "ooo_external_none": "get no reply.",
         "ooo_external_different": "get this reply:\n{text}",
+        "list_changed_subject": "The list {group} was changed",
+        "list_changed_text": (
+            "The distribution list {group} was changed through Claude by {email}.\n\n"
+            "Added:\n{added}\n\nRemoved:\n{removed}\n\n"
+            "If this was not you, tell the IT department immediately.\n"
+        ),
         "ooo_off_subject": "Your out-of-office auto-reply is off",
         "ooo_off_text": (
             "The out-of-office auto-reply for the account {email} was switched off through Claude.\n\n"
@@ -238,6 +244,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "ooo_external_same": "получават същия отговор.",
         "ooo_external_none": "не получават отговор.",
         "ooo_external_different": "получават този отговор:\n{text}",
+        "list_changed_subject": "Списъкът {group} е променен",
+        "list_changed_text": (
+            "Списъкът за разпращане {group} беше променен чрез Claude от {email}.\n\n"
+            "Добавени:\n{added}\n\nПремахнати:\n{removed}\n\n"
+            "Ако не сте били вие, съобщете веднага на ИТ отдела.\n"
+        ),
         "ooo_off_subject": "Автоматичният отговор при отсъствие е изключен",
         "ooo_off_text": (
             "Автоматичният отговор при отсъствие за акаунта {email} беше изключен чрез Claude.\n\n"

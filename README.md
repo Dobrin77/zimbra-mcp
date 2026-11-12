@@ -23,9 +23,9 @@ Claude ──HTTPS + OAuth──▶ Caddy (mcp.example.com:443) ──▶ zimbra
 
 ## Tools
 
-| Mail | Calendar | Contacts | Tags |
+| Mail | Calendar | Contacts | Tags and lists |
 |---|---|---|---|
-| search_emails, get_email, get_attachment, list_folders, search_folder, move_emails, mark_as_read, delete_emails (to Trash), create_draft, send_email, list_send_identities (send from a shared address with the Zimbra Send As right) | get_calendar_events, get_event_details, create_event, get_free_busy, get_out_of_office, set_out_of_office, disable_out_of_office (auto-reply with a linked "Out of office" event), who_is_out (colleagues on leave) | search_contacts, get_contact, create_contact, update_contact, delete_contact | list_tags, create_tag, delete_tag, add_tag_to_emails, remove_tag_from_emails |
+| search_emails, get_email, get_attachment, list_folders, search_folder, move_emails, mark_as_read, delete_emails (to Trash), create_draft, send_email, list_send_identities (send from a shared address with the Zimbra Send As right) | get_calendar_events, get_event_details, create_event, get_free_busy, get_out_of_office, set_out_of_office, disable_out_of_office (auto-reply with a linked "Out of office" event), who_is_out (colleagues on leave) | search_contacts, get_contact, create_contact, update_contact, delete_contact | list_tags, create_tag, delete_tag, add_tag_to_emails, remove_tag_from_emails; list_my_distribution_lists, get_distribution_list_members, compare_distribution_list, update_distribution_list (for list owners) |
 
 ## Calendar in Outlook (CalDAV gateway)
 
