@@ -545,6 +545,7 @@ class ZimbraClient:
         description: str | None = None,
         attendees: list[str] | None = None,
         all_day: bool = False,
+        send_invites: bool = False,
     ) -> dict[str, Any]:
         """Create a calendar event.
 
@@ -556,6 +557,8 @@ class ZimbraClient:
             description: Description
             attendees: List of attendees
             all_day: All-day event
+            send_invites: E-mail the invitation to the attendees (a meeting request);
+                without it they are only listed in the organiser's event
 
         Returns:
             Information about the created event
@@ -588,13 +591,21 @@ class ZimbraClient:
             inv["comp"]["desc"] = description
 
         if attendees:
-            inv["comp"]["at"] = [{"a": addr, "role": "REQ"} for addr in attendees]
+            # A meeting needs an organiser; attendees start as "needs action" and are asked to reply.
+            inv["comp"]["or"] = {"a": self.config.user}
+            inv["comp"]["at"] = [
+                {"a": addr, "role": "REQ", "ptst": "NE", "rsvp": "1"} for addr in attendees
+            ]
 
         if all_day:
             inv["comp"]["allDay"] = "1"
 
-        params = {"m": {"inv": inv, "su": subject}}
-        return self.request("CreateAppointmentRequest", "urn:zimbraMail", params)
+        message: dict[str, Any] = {"inv": inv, "su": subject}
+        if attendees and send_invites:
+            # The recipients of the invitation e-mail; without them Zimbra sends nothing.
+            message["e"] = [{"a": addr, "t": "t"} for addr in attendees]
+            message["mp"] = {"ct": "text/plain", "content": description or ""}
+        return self.request("CreateAppointmentRequest", "urn:zimbraMail", {"m": message})
 
     def get_prefs(self, names: list[str]) -> dict[str, str]:
         """The user's own preferences (zimbraPref*), by name; unset ones are left out.

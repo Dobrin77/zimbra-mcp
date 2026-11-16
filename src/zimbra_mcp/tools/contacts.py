@@ -5,6 +5,7 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 
 from zimbra_mcp.client import ZimbraClient
+from zimbra_mcp.errors import ZimbraOperationError
 from zimbra_mcp.tools.annotations import DESTRUCTIVE, READ_ONLY, WRITE
 
 # Mapping from Python snake_case to Zimbra camelCase attribute names
@@ -99,12 +100,46 @@ def register_contact_tools(mcp: MCPServer, client: ZimbraClient) -> None:
         return _folder_cache[user]
 
     @mcp.tool(annotations=READ_ONLY)
+    def find_colleague(name: str, limit: int = 10) -> dict[str, Any]:
+        """Find a colleague's e-mail address in the organisation's directory (GAL) by name
+        (колега, служител, имейл на, адрес на, кой е).
+
+        Use this for people in the organisation, before find_meeting_time, who_is_out
+        or writing to someone; search_contacts only covers the user's own contacts.
+        Names match from the start of any word, so try the full first name or the
+        surname, and the Latin spelling if the Cyrillic one finds nothing (and vice versa).
+
+        Args:
+            name: First name, surname or the start of the e-mail address
+            limit: Maximum number of results, 1 to 50 (default: 10)
+
+        Returns:
+            Matching people with e-mail, name and, where filled in, company and department
+        """
+        name = (name or "").strip()
+        if not name:
+            raise ZimbraOperationError("Give a name to search for.")
+        limit = max(1, min(50, limit))
+        people, more = client.search_gal(name, limit=limit)
+        result: dict[str, Any] = {"query": name, "people": people, "count": len(people)}
+        if more:
+            result["more"] = True
+        if not people and len(name) > 3:
+            # Short forms such as a nickname: retry with the first letters and say so.
+            people, more = client.search_gal(name[:3], limit=limit)
+            if people:
+                result.update(people=people, count=len(people), partial_match=name[:3],
+                              note=f"No exact match for {name!r}; these start with {name[:3]!r}. Ask the user which one.")
+        return result
+
+    @mcp.tool(annotations=READ_ONLY)
     def search_contacts(
         query: str = "",
         limit: int = 50,
         offset: int = 0,
     ) -> dict[str, Any]:
-        """Search contacts in the address book.
+        """Search the user's own contacts (personal address book). For colleagues in the
+        organisation use find_colleague.
 
         Args:
             query: Search query (searches across all fields). Use "*" or empty string for all contacts.

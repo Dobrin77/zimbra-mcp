@@ -1,20 +1,29 @@
 """MCP tools for Zimbra calendar management."""
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from zimbra_mcp.client import ZimbraClient
+from zimbra_mcp.client import ZimbraClient, _as_list
+from zimbra_mcp.errors import ZimbraOperationError
 from zimbra_mcp.tools.annotations import READ_ONLY, WRITE
 
+MEETING_MAX_PEOPLE = 50
+MEETING_MAX_DAYS = 31
+MEETING_STEP_MINUTES = 30
+MEETING_PER_DAY = 2
+AFTERNOON = time(13, 0)
+BUSY_KEYS = ("b", "t", "u")  # busy, tentative, out of office
 
-def register_calendar_tools(mcp: MCPServer, client: ZimbraClient) -> None:
+
+def register_calendar_tools(mcp: MCPServer, client: ZimbraClient, send_invites: bool = False) -> None:
     """Register calendar management tools.
 
     Args:
         mcp: MCPServer instance
         client: Zimbra client
+        send_invites: Whether create_event e-mails invitations (follows the server's send setting)
     """
 
     @mcp.tool(annotations=READ_ONLY)
@@ -67,9 +76,11 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient) -> None:
                     "location": appt.get("loc", ""),
                     "start": _ms_to_datetime(inst.get("s")),
                     "start_ms": inst.get("s"),
-                    "duration_minutes": (inst.get("dur", 0) or 0) // 60000,
-                    "all_day": appt.get("allDay", "0") == "1",
-                    "is_recurring": inst.get("ridZ") is not None,
+                    # Zimbra gives the duration on the appointment; an instance has its own only
+                    # when it was changed. Every expanded instance has a ridZ, so "recur" decides.
+                    "duration_minutes": (inst.get("dur") or appt.get("dur") or 0) // 60000,
+                    "all_day": str(appt.get("allDay", "0")).lower() in ("1", "true"),
+                    "is_recurring": str(appt.get("recur", "0")).lower() in ("1", "true"),
                     "organizer": appt.get("or", {}).get("a"),
                     "status": appt.get("status"),
                     "fragment": appt.get("fr", ""),
@@ -162,19 +173,24 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient) -> None:
         attendees: list[str] | None = None,
         all_day: bool = False,
     ) -> dict[str, Any]:
-        """Create a calendar event.
+        """Create a calendar event or a meeting (насрочи среща, покани).
+
+        With attendees it is a meeting: if sending is enabled on the server, each
+        attendee gets an invitation e-mail they can accept or decline. Before calling
+        it with attendees, show the user the title, time and attendees and wait for
+        confirmation. Report invitations as sent only if invitations_sent is true.
 
         Args:
             subject: Event title
             start_datetime: Start date/time in "YYYY-MM-DD HH:MM" or "YYYY-MM-DD" format for all-day events
             end_datetime: End date/time in "YYYY-MM-DD HH:MM" or "YYYY-MM-DD" format for all-day events
             location: Event location (optional)
-            description: Event description (optional)
-            attendees: List of attendee emails (optional)
+            description: Event description, also the text of the invitation (optional)
+            attendees: List of attendee emails (optional); look names up with find_colleague
             all_day: All-day event (default: False)
 
         Returns:
-            Information about the created event
+            Information about the created event and whether invitations were sent
         """
         if all_day:
             start_dt = datetime.strptime(start_datetime[:10], "%Y-%m-%d")
@@ -198,9 +214,11 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient) -> None:
             description=description,
             attendees=attendees,
             all_day=all_day,
+            send_invites=send_invites,
         )
 
-        return {
+        invited = bool(attendees) and send_invites
+        response = {
             "success": True,
             "event_id": result.get("calItemId") or result.get("apptId"),
             "invite_id": result.get("invId"),
@@ -210,7 +228,14 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient) -> None:
             "location": location,
             "attendees": attendees,
             "all_day": all_day,
+            "invitations_sent": invited,
         }
+        if attendees and not send_invites:
+            response["note"] = (
+                "Sending is disabled on this server, so no invitations were e-mailed; the attendees "
+                "are only listed in the user's event. Tell the user to invite them from Outlook."
+            )
+        return response
 
     @mcp.tool(annotations=READ_ONLY)
     def get_free_busy(
@@ -297,6 +322,161 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient) -> None:
             "busy_slots": sorted(busy_slots, key=lambda s: s.get("start", "")),
             "free_slots": sorted(free_slots, key=lambda s: s.get("start", "")),
         }
+
+    @mcp.tool(annotations=READ_ONLY)
+    def find_meeting_time(
+        attendees: list[str],
+        duration_minutes: int = 60,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        day_start: str = "09:00",
+        day_end: str = "18:00",
+        include_me: bool = True,
+        max_results: int = 5,
+    ) -> dict[str, Any]:
+        """Find a free time for a meeting with several colleagues (свободен час за среща,
+        кога сме свободни, общ свободен час, насрочи среща).
+
+        Looks at everyone's free/busy at once and returns times on working days
+        (Monday to Friday, between day_start and day_end) when all of them are free.
+        Busy, tentative and out-of-office time all count as taken. Only times are
+        returned, never what is in anyone's calendar. To book one of the times, use
+        create_event with the attendees after the user has picked it.
+
+        Args:
+            attendees: E-mail addresses of the other people (at most 50); look names up with find_colleague
+            duration_minutes: Length of the meeting, 15 to 480 (default: 60)
+            start_date: First day to look at, YYYY-MM-DD (default: today; times already past are skipped)
+            end_date: Last day to look at, YYYY-MM-DD (default: 7 days after start_date, at most 31)
+            day_start: Earliest start of the working day, HH:MM (default: 09:00)
+            day_end: Latest end of the working day, HH:MM (default: 18:00)
+            include_me: Also check the signed-in user's own calendar (default: true)
+            max_results: How many times to suggest, 1 to 20 (default: 5)
+
+        Returns:
+            Suggested times (start, end); when there is none, the times with the fewest
+            people busy and who they are
+        """
+        people = list(dict.fromkeys(a.strip().lower() for a in attendees or [] if a and a.strip()))
+        if include_me and client.config.user:
+            me = client.config.user.lower()
+            people = [me] + [p for p in people if p != me]
+        if not people:
+            raise ZimbraOperationError("Give at least one attendee e-mail address.")
+        bad = [p for p in people if "@" not in p]
+        if bad:
+            raise ZimbraOperationError(f"Not an e-mail address: {', '.join(bad)}")
+        if len(people) > MEETING_MAX_PEOPLE:
+            raise ZimbraOperationError(f"At most {MEETING_MAX_PEOPLE} people at once.")
+        if not 15 <= duration_minutes <= 480:
+            raise ZimbraOperationError("duration_minutes must be between 15 and 480.")
+        max_results = max(1, min(20, max_results))
+        first = _day(start_date, "start_date") if start_date else datetime.now().date()
+        last = _day(end_date, "end_date") if end_date else first + timedelta(days=7)
+        if last < first:
+            raise ZimbraOperationError("end_date is before start_date.")
+        if (last - first).days > MEETING_MAX_DAYS:
+            raise ZimbraOperationError(f"The period may be at most {MEETING_MAX_DAYS} days.")
+        open_at, close_at = _clock(day_start, "day_start"), _clock(day_end, "day_end")
+        length = timedelta(minutes=duration_minutes)
+        if datetime.combine(first, open_at) + length > datetime.combine(first, close_at):
+            raise ZimbraOperationError("The meeting does not fit between day_start and day_end.")
+
+        window_start = datetime.combine(first, time.min)
+        window_end = datetime.combine(last + timedelta(days=1), time.min)
+        busy: dict[str, list[tuple[datetime, datetime]]] = {}
+        no_data: list[str] = []
+        for user in client.get_free_busy_many(
+            people, int(window_start.timestamp() * 1000), int(window_end.timestamp() * 1000),
+        ):
+            email = str(user.get("id", "")).lower()
+            if user.get("n") is not None and not any(user.get(k) for k in BUSY_KEYS + ("f",)):
+                no_data.append(email)
+            busy[email] = [
+                (datetime.fromtimestamp(int(slot["s"]) / 1000), datetime.fromtimestamp(int(slot["e"]) / 1000))
+                for key in BUSY_KEYS for slot in _as_list(user.get(key)) if "s" in slot and "e" in slot
+            ]
+        unknown = sorted(set(people) - set(busy)) + sorted(no_data)
+
+        now = datetime.now()
+        candidates: list[tuple[datetime, list[str]]] = []
+        day = first
+        while day <= last:
+            if day.weekday() < 5:
+                begin = datetime.combine(day, open_at)
+                close = datetime.combine(day, close_at)
+                while begin + length <= close:
+                    if begin >= now:
+                        end = begin + length
+                        taken = [p for p in people if any(s < end and e > begin for s, e in busy.get(p, []))]
+                        candidates.append((begin, taken))
+                    begin += timedelta(minutes=MEETING_STEP_MINUTES)
+            day += timedelta(days=1)
+
+        free = _spread([b for b, taken in candidates if not taken], length, max_results)
+        result: dict[str, Any] = {
+            "period": {"start": first.isoformat(), "end": last.isoformat()},
+            "working_hours": f"{open_at:%H:%M}-{close_at:%H:%M}, Monday to Friday",
+            "duration_minutes": duration_minutes,
+            "people": people,
+            "free_times": [_slot(b, length) for b in free],
+        }
+        if not free:
+            fewest = min((len(t) for _, t in candidates), default=0)
+            near = [(b, t) for b, t in candidates if len(t) == fewest]
+            picked = _spread([b for b, _ in near], length, max_results)
+            taken_at = dict(near)
+            result["closest_times"] = [{**_slot(b, length), "busy": taken_at[b]} for b in picked]
+        if unknown:
+            result["warning"] = (
+                "No calendar information for: " + ", ".join(unknown)
+                + ". Check the addresses; these people were treated as free."
+            )
+        return result
+
+
+def _day(value: str, name: str) -> date:
+    try:
+        return datetime.strptime(value.strip(), "%Y-%m-%d").date()
+    except (ValueError, AttributeError):
+        raise ZimbraOperationError(f"{name} must be a date in YYYY-MM-DD format.")
+
+
+def _clock(value: str, name: str) -> time:
+    try:
+        return datetime.strptime(value.strip(), "%H:%M").time()
+    except (ValueError, AttributeError):
+        raise ZimbraOperationError(f"{name} must be a time in HH:MM format.")
+
+
+def _slot(begin: datetime, length: timedelta) -> dict[str, str]:
+    end = begin + length
+    return {"start": begin.strftime("%Y-%m-%d %H:%M"), "end": end.strftime("%Y-%m-%d %H:%M"),
+            "weekday": begin.strftime("%A")}
+
+
+def _spread(starts: list[datetime], length: timedelta, limit: int) -> list[datetime]:
+    """Non-overlapping times, day by day: the earliest time and one afternoon time of each
+    day, then whatever is left in order."""
+    chosen: list[datetime] = []
+
+    def fits(begin: datetime) -> bool:
+        return not any(abs(begin - c) < length for c in chosen)
+
+    def per_day(begin: datetime) -> int:
+        return sum(c.date() == begin.date() for c in chosen)
+
+    passes = (
+        lambda b: per_day(b) == 0 or (per_day(b) < MEETING_PER_DAY and b.time() >= AFTERNOON),
+        lambda b: True,
+    )
+    for allowed in passes:
+        for begin in starts:
+            if len(chosen) >= limit:
+                return sorted(chosen)
+            if fits(begin) and allowed(begin):
+                chosen.append(begin)
+    return sorted(chosen)
 
 
 def _ms_to_datetime(ms: int | None) -> str | None:

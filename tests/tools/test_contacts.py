@@ -158,3 +158,26 @@ class TestDeleteContact:
         assert result["success"] is True
         assert result["deleted_count"] == 2
         client.delete_contacts.assert_called_once_with(["100", "101"])
+
+
+class TestFindColleague:
+    def test_found(self, contact_tools):
+        tools, client = contact_tools
+        client.search_gal = MagicMock(return_value=([{"email": "teo@example.com", "name": "Teodor B"}], False))
+        result = tools["find_colleague"]("Teodor")
+        assert result["people"][0]["email"] == "teo@example.com"
+        assert client.search_gal.call_args[0][0] == "Teodor"
+        assert "partial_match" not in result
+
+    def test_nickname_falls_back_to_first_letters(self, contact_tools):
+        tools, client = contact_tools
+        client.search_gal = MagicMock(side_effect=[([], False), ([{"email": "gabi@example.com", "name": "Gabriela"}], False)])
+        result = tools["find_colleague"]("Gabi")
+        assert client.search_gal.call_args_list[1][0][0] == "Gab"
+        assert result["partial_match"] == "Gab" and result["count"] == 1
+
+    def test_empty_name(self, contact_tools):
+        from zimbra_mcp.errors import ZimbraOperationError
+        tools, _ = contact_tools
+        with pytest.raises(ZimbraOperationError):
+            tools["find_colleague"]("  ")

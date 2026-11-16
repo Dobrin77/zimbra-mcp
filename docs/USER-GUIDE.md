@@ -98,6 +98,17 @@ Claude checks your colleagues' availability and tells you who is away. Examples:
 
 You see only who is away and from when to when, never the details of their events, just as when you schedule a meeting in Zimbra. A colleague shows as away only if it is in their calendar, for example the "Out of office" event created with the auto-reply.
 
+### A free time for a meeting
+
+Claude checks everyone's availability at once and suggests times when all of them are free. You can name colleagues: Claude finds them in the organisation's address book. Examples:
+
+- *"Find a free hour for a meeting with Ivan Petrov and Maria Ivanova next week"*
+- *"When are office@ and I both free on Thursday or Friday afternoon, for 30 minutes?"*
+
+It looks within working hours, 9:00 to 18:00 Monday to Friday, unless you say otherwise, and checks your own calendar too. Each day it suggests one morning and one afternoon time. If there is no common free time, Claude shows the closest options and who is busy then. It sees only when people are busy, never what is in their calendars.
+
+Once you pick a time, say *"Book it on Wednesday at 10:00, subject ..."*. Claude creates the meeting and sends the invitations. Colleagues accept or decline them as usual, and their replies show in your meeting.
+
 ### Distribution lists (for the people who keep them)
 
 If you keep a list such as staff@ or management@, IT makes you its **owner**. Then tell Claude, for example:

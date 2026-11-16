@@ -551,7 +551,22 @@ class TestCreateAppointment:
             attendees=["alice@example.com"],
         )
         params = _get_request_params(connected_client)
-        assert params["m"]["inv"]["comp"]["at"][0]["a"] == "alice@example.com"
+        comp = params["m"]["inv"]["comp"]
+        assert comp["at"][0] == {"a": "alice@example.com", "role": "REQ", "ptst": "NE", "rsvp": "1"}
+        assert comp["or"] == {"a": "test@example.com"}
+        assert "e" not in params["m"]  # no invitation e-mail unless asked
+
+    def test_sends_invites(self, connected_client):
+        resp = _make_ok_response("CreateAppointmentResponse", {"calItemId": "702"})
+        _setup_response(connected_client, resp)
+
+        connected_client.create_appointment(
+            subject="Meeting", start_time=1705312200000, end_time=1705315800000,
+            attendees=["alice@example.com", "bob@example.com"], description="Agenda", send_invites=True,
+        )
+        params = _get_request_params(connected_client)
+        assert params["m"]["e"] == [{"a": "alice@example.com", "t": "t"}, {"a": "bob@example.com", "t": "t"}]
+        assert params["m"]["mp"] == {"ct": "text/plain", "content": "Agenda"}
 
 
 class TestGetFreeBusy:
