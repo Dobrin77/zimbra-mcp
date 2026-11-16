@@ -34,12 +34,24 @@ A passkey replaces the password: you confirm with Windows Hello (PIN, fingerprin
 
 ### Devices
 
-- **Windows:** requires Windows Hello, Windows 10 version 1903 or newer. Set the PIN under *Settings → Accounts → Sign-in options → Windows Hello PIN*. Windows Hello does not work over **Remote Desktop (RDP)**. Enroll from the computer you are sitting at, or from your phone.
+- **Windows:** requires Windows Hello, Windows 10 version 1903 or newer. Set the PIN under *Settings → Accounts → Sign-in options → Windows Hello PIN*; see the steps below. Windows Hello does not work over **Remote Desktop (RDP)**. Enroll from the computer you are sitting at, or from your phone.
 - **Mac:** requires **macOS 13 Ventura** or newer. The passkey is stored in **iCloud Keychain**, which must be on: *System Settings → [your name] → iCloud → Passwords & Keychain*. If you are signed in to a work Mac with your personal Apple ID, the passkey will also be on your personal devices.
   - Enroll and press **Connect** in the same browser. If Chrome offers to store the passkey in Google Password Manager, choose **iCloud Keychain** instead, or Safari won't see it.
 - **Phone (iPhone / Android):** you can also enroll from your phone on the office Wi-Fi, or with an invite.
 - **The computer has no passkey:** at sign-in choose "Use a phone or tablet" and scan the QR code with the phone that holds the passkey. The computer needs Bluetooth.
 - **Backup:** enroll a passkey on both your computer and your phone. If you lose one device, you won't be locked out.
+
+**Windows Hello PIN, if you don't have one yet.** Windows first needs a **password for signing in to the computer**. It is only for the computer and has nothing to do with your mail password.
+
+1. Open **Start → Settings → Accounts → Sign-in options**.
+2. Look at **Password**:
+   - if the button says **Add**, the computer has no password. Click **Add**, enter the new password twice and a hint, then **Next → Finish**;
+   - if it says **Change**, you already have one. Go on to step 3.
+3. Under **Windows Hello PIN** click **Add** (in Windows 11, **PIN (Windows Hello) → Set up**).
+4. Confirm the computer password and enter the PIN twice. Digits only is fine, for example 6 digits.
+5. From the next sign-in Windows asks for the PIN. The same PIN also confirms your passkey.
+
+If the buttons are greyed out on a work computer, or it says the setting is managed by your organisation, ask the IT department.
 
 ## 3. Connecting Claude to your mail
 
