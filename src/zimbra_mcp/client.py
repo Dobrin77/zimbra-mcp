@@ -607,6 +607,39 @@ class ZimbraClient:
             message["mp"] = {"ct": "text/plain", "content": description or ""}
         return self.request("CreateAppointmentRequest", "urn:zimbraMail", {"m": message})
 
+    def reply_to_invite(
+        self,
+        invite_id: str,
+        verb: str,
+        notify: bool = True,
+        comment: str = "",
+        occurrence_id: str | None = None,
+        organizer: str | None = None,
+        subject: str = "",
+    ) -> dict[str, Any]:
+        """Answer a meeting invitation (ACCEPT, DECLINE or TENTATIVE).
+
+        notify sends the reply to the organizer; occurrence_id (an instance's ridZ)
+        answers one time of a recurring meeting instead of the whole series. A comment
+        needs the organizer and subject: with a message of its own, Zimbra leaves
+        addressing it to the client.
+        """
+        params: dict[str, Any] = {
+            "id": invite_id,
+            "compNum": 0,
+            "verb": verb,
+            "updateOrganizer": "TRUE" if notify else "FALSE",
+        }
+        if occurrence_id:
+            params["exceptId"] = {"d": occurrence_id}
+        if notify and comment and organizer:
+            params["m"] = {
+                "e": [{"a": organizer, "t": "t"}],
+                "su": subject,
+                "mp": {"ct": "text/plain", "content": comment},
+            }
+        return self.request("SendInviteReplyRequest", "urn:zimbraMail", params)
+
     def get_prefs(self, names: list[str]) -> dict[str, str]:
         """The user's own preferences (zimbraPref*), by name; unset ones are left out.
 

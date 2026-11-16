@@ -638,3 +638,22 @@ class TestDeleteContacts:
         params = _get_request_params(connected_client)
         assert params["action"]["id"] == "100,101"
         assert params["action"]["op"] == "delete"
+
+
+class TestReplyToInvite:
+    def test_accept_series(self, connected_client):
+        resp = _make_ok_response("SendInviteReplyResponse", {})
+        _setup_response(connected_client, resp)
+        connected_client.reply_to_invite("10-9", "ACCEPT")
+        params = _get_request_params(connected_client)
+        assert params == {"id": "10-9", "compNum": 0, "verb": "ACCEPT", "updateOrganizer": "TRUE"}
+
+    def test_decline_one_time_with_comment(self, connected_client):
+        resp = _make_ok_response("SendInviteReplyResponse", {})
+        _setup_response(connected_client, resp)
+        connected_client.reply_to_invite("10-9", "DECLINE", comment="Friday?", occurrence_id="r2",
+                                         organizer="boss@example.com", subject="Declined: Review")
+        params = _get_request_params(connected_client)
+        assert params["exceptId"] == {"d": "r2"}
+        assert params["m"] == {"e": [{"a": "boss@example.com", "t": "t"}], "su": "Declined: Review",
+                               "mp": {"ct": "text/plain", "content": "Friday?"}}

@@ -300,3 +300,63 @@ class TestFindMeetingTime:
         from zimbra_mcp.errors import ZimbraOperationError
         with pytest.raises(ZimbraOperationError, match=match):
             self._run(cal_tools, [], **kwargs)
+
+
+class TestInvitations:
+    APPTS = {"appt": [
+        {"id": "10", "invId": "10-9", "name": "Review", "or": {"a": "boss@example.com"}, "ptst": "NE",
+         "dur": 1800000, "inst": [{"s": 1900000000000, "ridZ": "x"}]},
+        {"id": "11", "invId": "11-8", "name": "Mine", "isOrg": True, "ptst": "AC",
+         "inst": [{"s": 1900000000000}]},
+        {"id": "12", "invId": "12-7", "name": "Accepted", "ptst": "AC", "inst": [{"s": 1900000000000}]},
+        {"id": "13", "invId": "13-6", "name": "Weekly", "recur": True, "ptst": "NE", "dur": 3600000,
+         "inst": [{"s": 1900600000000, "ridZ": "20300322T100000Z"}, {"s": 1901200000000, "ridZ": "r2"}]},
+    ]}
+
+    def test_list_only_unanswered(self, cal_tools):
+        tools, client = cal_tools
+        client.search_calendar = MagicMock(return_value=self.APPTS)
+        result = tools["list_invitations"]()
+        assert [i["name"] for i in result["invitations"]] == ["Review", "Weekly"]
+        review, weekly = result["invitations"]
+        assert review["invite_id"] == "10-9" and review["duration_minutes"] == 30
+        assert weekly["upcoming_times"] == 2 and weekly["first_occurrence_id"] == "20300322T100000Z"
+
+    def test_my_response_in_events(self, cal_tools):
+        tools, client = cal_tools
+        client.search_calendar = MagicMock(return_value=self.APPTS)
+        events = tools["get_calendar_events"](start_date="2030-03-01", days=60)["events"]
+        assert {e["name"]: e["my_response"] for e in events}["Review"] == "needs_reply"
+        assert [e.get("occurrence_id") for e in events if e["name"] == "Weekly"] == ["20300322T100000Z", "r2"]
+
+    def test_accept_without_sending(self, cal_tools):
+        tools, client = cal_tools
+        client.reply_to_invite = MagicMock(return_value={})
+        result = tools["respond_to_invitation"]("10-9", "Accept", comment="ok")
+        args, kwargs = client.reply_to_invite.call_args
+        assert args == ("10-9", "ACCEPT") and kwargs["notify"] is False and kwargs["organizer"] is None
+        assert result["organizer_notified"] is False and "note" in result
+
+    def test_decline_with_comment_and_sending(self, connected_client):
+        tools = capture_tools(register_calendar_tools, connected_client, True)
+        connected_client.get_appointment = MagicMock(return_value={"appt": [{"inv": [{"comp": [
+            {"name": "Review", "or": {"a": "boss@example.com"}}]}]}]})
+        connected_client.reply_to_invite = MagicMock(return_value={})
+        result = tools["respond_to_invitation"]("10-9", "decline", comment="Friday?", occurrence_id="r2")
+        connected_client.get_appointment.assert_called_once_with("10")
+        kwargs = connected_client.reply_to_invite.call_args.kwargs
+        assert kwargs["organizer"] == "boss@example.com" and kwargs["subject"] == "Declined: Review"
+        assert kwargs["occurrence_id"] == "r2" and kwargs["notify"] is True
+        assert result["whole_series"] is False and result["organizer_notified"] is True
+
+    @pytest.mark.parametrize("args,match", [
+        (("10-9", "maybe"), "response must be"),
+        (("", "accept"), "invite_id"),
+    ])
+    def test_refused(self, cal_tools, args, match):
+        from zimbra_mcp.errors import ZimbraOperationError
+        tools, client = cal_tools
+        client.reply_to_invite = MagicMock()
+        with pytest.raises(ZimbraOperationError, match=match):
+            tools["respond_to_invitation"](*args)
+        client.reply_to_invite.assert_not_called()

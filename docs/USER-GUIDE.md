@@ -27,7 +27,7 @@ A passkey replaces the password: you confirm with Windows Hello (PIN, fingerprin
 
 1. Open **https://mcp.example.com/enroll**.
 2. Enter your work e-mail and press **Send code**.
-3. Enter the code that arrives in your mailbox.
+3. Enter the code that arrives in your mailbox. The code is valid for 15 minutes. If it expires, press **Send code** again.
 4. Confirm with Windows Hello, a fingerprint or your phone.
 
 **If you don't work from the office:** ask IT for an **invite**. You'll get a personal link by phone, Viber or SMS. Open it, press **Send code**, enter the code from your mailbox and confirm with a passkey. The link works only once, only for your account, and is valid for 72 hours.
@@ -120,6 +120,17 @@ Claude checks everyone's availability at once and suggests times when all of the
 It looks within working hours, 9:00 to 18:00 Monday to Friday, unless you say otherwise, and checks your own calendar too. Each day it suggests one morning and one afternoon time. If there is no common free time, Claude shows the closest options and who is busy then. It sees only when people are busy, never what is in their calendars.
 
 Once you pick a time, say *"Book it on Wednesday at 10:00, subject ..."*. Claude creates the meeting and sends the invitations. Colleagues accept or decline them as usual, and their replies show in your meeting.
+
+### Meeting invitations
+
+Claude shows the invitations you have not answered yet and answers them for you. Examples:
+
+- *"Do I have any unanswered invitations?"*
+- *"Accept the invitation for the Thursday meeting"*
+- *"Decline the Friday meeting and say I suggest Monday at 10:00"*: the suggestion reaches the organizer as a note with the decline.
+- *"Accept the weekly meeting, but decline just the one on Wednesday"*: for a recurring meeting you can answer for the whole series or for one day.
+
+Claude says which meeting and which answer, and waits for your confirmation. The organizer gets your answer just as if you had pressed the button in Outlook.
 
 ### Distribution lists (for the people who keep them)
 

@@ -84,7 +84,11 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient, send_invites: 
                     "organizer": appt.get("or", {}).get("a"),
                     "status": appt.get("status"),
                     "fragment": appt.get("fr", ""),
+                    "my_response": _response_name(inst.get("ptst") or appt.get("ptst")),
+                    "invite_id": appt.get("invId"),
                 }
+                if event_info["is_recurring"] and inst.get("ridZ"):
+                    event_info["occurrence_id"] = inst["ridZ"]
                 events.append(event_info)
 
         events.sort(key=lambda e: e.get("start_ms", 0))
@@ -324,6 +328,108 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient, send_invites: 
         }
 
     @mcp.tool(annotations=READ_ONLY)
+    def list_invitations(days: int = 60) -> dict[str, Any]:
+        """Meeting invitations the user has not answered yet (покани за среща, неотговорени
+        покани, кой ме е поканил).
+
+        Args:
+            days: How many days ahead to look, 1 to 365 (default: 60)
+
+        Returns:
+            Each invitation with invite_id (for respond_to_invitation), title, organizer,
+            start, duration and, for a recurring meeting, the number of its upcoming times
+        """
+        days = max(1, min(365, days))
+        start = datetime.now().replace(second=0, microsecond=0)
+        end = start + timedelta(days=days)
+        result = client.search_calendar(int(start.timestamp() * 1000), int(end.timestamp() * 1000))
+        pending = []
+        for appt in _as_list(result.get("appt")):
+            if _truthy(appt.get("isOrg")):
+                continue
+            waiting = [i for i in _as_list(appt.get("inst")) if (i.get("ptst") or appt.get("ptst")) == "NE"]
+            if not waiting:
+                continue
+            first = min(waiting, key=lambda i: i.get("s", 0))
+            item = {
+                "invite_id": appt.get("invId"),
+                "name": appt.get("name", "(no title)"),
+                "organizer": (appt.get("or") or {}).get("a"),
+                "location": appt.get("loc", ""),
+                "start": _ms_to_datetime(first.get("s")),
+                "duration_minutes": (first.get("dur") or appt.get("dur") or 0) // 60000,
+                "is_recurring": _truthy(appt.get("recur")),
+            }
+            if item["is_recurring"]:
+                item["upcoming_times"] = len(waiting)
+                item["first_occurrence_id"] = first.get("ridZ")
+            pending.append(item)
+        pending.sort(key=lambda i: i["start"] or "")
+        return {"period_days": days, "invitations": pending, "count": len(pending)}
+
+    @mcp.tool(annotations=WRITE)
+    def respond_to_invitation(
+        invite_id: str,
+        response: str,
+        comment: str | None = None,
+        occurrence_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Accept, decline or tentatively accept a meeting invitation (приеми, откажи,
+        може би, отговори на покана).
+
+        The organizer gets the reply by e-mail (when sending is enabled on the server),
+        with the comment if given. To suggest another time, decline or answer
+        "tentative" and write the suggestion in the comment. Before calling it, tell the
+        user which meeting and which answer, and wait for confirmation.
+
+        Args:
+            invite_id: invite_id from list_invitations or get_calendar_events
+            response: "accept", "decline" or "tentative"
+            comment: Short note to the organizer (optional, up to 1000 characters)
+            occurrence_id: For a recurring meeting, the occurrence_id of one time to answer
+                only that one; without it the answer covers the whole series
+
+        Returns:
+            The answer given and whether the organizer was notified
+        """
+        verb = RESPONSE_VERBS.get((response or "").strip().lower())
+        if not verb:
+            raise ZimbraOperationError('response must be "accept", "decline" or "tentative".')
+        if not invite_id or not str(invite_id).strip():
+            raise ZimbraOperationError("Give the invite_id from list_invitations.")
+        comment = (comment or "").strip()
+        if len(comment) > 1000:
+            raise ZimbraOperationError("The comment may be at most 1000 characters.")
+        invite_id = str(invite_id).strip()
+        organizer, name = None, ""
+        if comment and send_invites:
+            # The comment goes in a reply message of our own, which has to be addressed here.
+            appt = _first(client.get_appointment(invite_id.split("-")[0]).get("appt"))
+            comp = _first(_first(appt.get("inv")).get("comp"))
+            organizer = (comp.get("or") or {}).get("a")
+            name = comp.get("name", "")
+            if not organizer:
+                raise ZimbraOperationError("This meeting has no organizer to reply to.")
+        client.reply_to_invite(
+            invite_id, verb, notify=send_invites, comment=comment,
+            occurrence_id=(occurrence_id or "").strip() or None,
+            organizer=organizer, subject=f"{RESPONSE_SUBJECTS[verb]}: {name}".strip(),
+        )
+        result: dict[str, Any] = {
+            "success": True,
+            "invite_id": invite_id,
+            "response": response.strip().lower(),
+            "whole_series": not occurrence_id,
+            "organizer_notified": send_invites,
+        }
+        if not send_invites:
+            result["note"] = (
+                "Sending is disabled on this server: the answer is saved in the user's calendar, "
+                "but the organizer was not told. Tell the user to answer from Outlook if it matters."
+            )
+        return result
+
+    @mcp.tool(annotations=READ_ONLY)
     def find_meeting_time(
         attendees: list[str],
         duration_minutes: int = 60,
@@ -433,6 +539,24 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient, send_invites: 
                 + ". Check the addresses; these people were treated as free."
             )
         return result
+
+
+RESPONSE_VERBS = {"accept": "ACCEPT", "decline": "DECLINE", "tentative": "TENTATIVE"}
+RESPONSE_SUBJECTS = {"ACCEPT": "Accepted", "DECLINE": "Declined", "TENTATIVE": "Tentative"}
+
+
+def _first(value: Any) -> dict:
+    items = _as_list(value)
+    return items[0] if items and isinstance(items[0], dict) else {}
+_PTST_NAMES = {"NE": "needs_reply", "AC": "accepted", "DE": "declined", "TE": "tentative", "DG": "delegated"}
+
+
+def _response_name(ptst: Any) -> str | None:
+    return _PTST_NAMES.get(str(ptst)) if ptst else None
+
+
+def _truthy(value: Any) -> bool:
+    return str(value).lower() in ("1", "true")
 
 
 def _day(value: str, name: str) -> date:
