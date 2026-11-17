@@ -546,8 +546,12 @@ class ZimbraClient:
         attendees: list[str] | None = None,
         all_day: bool = False,
         send_invites: bool = False,
+        recurrence: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create a calendar event.
+
+        recurrence is a Zimbra recurrence rule, e.g. {"freq": "WEE", "interval": {"ival": 1},
+        "count": {"num": 10}}; the event then repeats.
 
         Args:
             subject: Event title
@@ -600,6 +604,9 @@ class ZimbraClient:
         if all_day:
             inv["comp"]["allDay"] = "1"
 
+        if recurrence:
+            inv["comp"]["recur"] = {"add": {"rule": recurrence}}
+
         message: dict[str, Any] = {"inv": inv, "su": subject}
         if attendees and send_invites:
             # The recipients of the invitation e-mail; without them Zimbra sends nothing.
@@ -639,6 +646,51 @@ class ZimbraClient:
                 "mp": {"ct": "text/plain", "content": comment},
             }
         return self.request("SendInviteReplyRequest", "urn:zimbraMail", params)
+
+    def modify_appointment(
+        self,
+        invite_id: str,
+        comp: dict[str, Any],
+        subject: str,
+        notify: list[str] | None = None,
+        body: str = "",
+        occurrence_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Replace an event's details with ``comp`` (the whole component, as Zimbra expects).
+
+        notify lists the attendees who get the updated invitation; occurrence_id (an
+        instance's ridZ) changes only that time of a recurring event.
+        """
+        comp = dict(comp)
+        if occurrence_id:
+            comp.pop("recur", None)
+            comp["exceptId"] = {"d": occurrence_id}
+        message: dict[str, Any] = {"inv": {"comp": comp}, "su": subject}
+        if notify:
+            message["e"] = [{"a": addr, "t": "t"} for addr in notify]
+            message["mp"] = {"ct": "text/plain", "content": body}
+        request = "CreateAppointmentExceptionRequest" if occurrence_id else "ModifyAppointmentRequest"
+        return self.request(request, "urn:zimbraMail", {"id": invite_id, "comp": "0", "m": message})
+
+    def cancel_appointment(
+        self,
+        invite_id: str,
+        subject: str,
+        notify: list[str] | None = None,
+        body: str = "",
+        occurrence_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Cancel an event, or one time of a recurring one; notify lists who gets the cancellation."""
+        params: dict[str, Any] = {"id": invite_id, "comp": "0"}
+        if occurrence_id:
+            params["inst"] = {"d": occurrence_id}
+        if notify:
+            params["m"] = {
+                "e": [{"a": addr, "t": "t"} for addr in notify],
+                "su": subject,
+                "mp": {"ct": "text/plain", "content": body},
+            }
+        return self.request("CancelAppointmentRequest", "urn:zimbraMail", params)
 
     def get_prefs(self, names: list[str]) -> dict[str, str]:
         """The user's own preferences (zimbraPref*), by name; unset ones are left out.

@@ -22,7 +22,7 @@ TOOL_GROUPS: dict[str, tuple[str, ...]] = {
              "move_emails", "mark_as_read", "delete_emails"),
     "send": ("send_email", "create_draft", "list_send_identities"),
     "calendar": ("get_calendar_events", "get_event_details", "create_event", "get_free_busy", "find_meeting_time",
-                 "list_invitations", "respond_to_invitation"),
+                 "list_invitations", "respond_to_invitation", "update_event", "cancel_event"),
     "out_of_office": ("get_out_of_office", "set_out_of_office", "disable_out_of_office", "who_is_out"),
     "contacts": ("find_colleague", "search_contacts", "get_contact", "create_contact", "update_contact", "delete_contact"),
     "lists": ("list_my_distribution_lists", "get_distribution_list_members", "compare_distribution_list",

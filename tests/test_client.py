@@ -657,3 +657,42 @@ class TestReplyToInvite:
         assert params["exceptId"] == {"d": "r2"}
         assert params["m"] == {"e": [{"a": "boss@example.com", "t": "t"}], "su": "Declined: Review",
                                "mp": {"ct": "text/plain", "content": "Friday?"}}
+
+
+class TestChangeAndCancelAppointment:
+    def test_modify_series_with_update(self, connected_client):
+        _setup_response(connected_client, _make_ok_response("ModifyAppointmentResponse", {}))
+        connected_client.modify_appointment("10-9", {"name": "Review", "recur": {}}, "Review",
+                                            notify=["ivan@example.com"], body="Moved")
+        params = _get_request_params(connected_client)
+        assert params["id"] == "10-9" and params["comp"] == "0"
+        assert params["m"]["inv"]["comp"] == {"name": "Review", "recur": {}}
+        assert params["m"]["e"] == [{"a": "ivan@example.com", "t": "t"}]
+        assert params["m"]["mp"]["content"] == "Moved"
+
+    def test_modify_one_occurrence_without_update(self, connected_client):
+        _setup_response(connected_client, _make_ok_response("CreateAppointmentExceptionResponse", {}))
+        connected_client.modify_appointment("10-9", {"name": "Review", "recur": {}}, "Review",
+                                            occurrence_id="20301125T080000Z")
+        params = _get_request_params(connected_client)
+        assert params["m"]["inv"]["comp"] == {"name": "Review", "exceptId": {"d": "20301125T080000Z"}}
+        assert "e" not in params["m"]
+        request_name = connected_client._comm.gen_request.return_value.add_request.call_args[0][0]
+        assert request_name == "CreateAppointmentExceptionRequest"
+
+    def test_cancel_one_occurrence(self, connected_client):
+        _setup_response(connected_client, _make_ok_response("CancelAppointmentResponse", {}))
+        connected_client.cancel_appointment("10-9", "Cancelled: Review", notify=["ivan@example.com"],
+                                            body="Sorry", occurrence_id="20301125T080000Z")
+        params = _get_request_params(connected_client)
+        assert params["inst"] == {"d": "20301125T080000Z"}
+        assert params["m"]["su"] == "Cancelled: Review" and params["m"]["e"][0]["a"] == "ivan@example.com"
+
+
+class TestCreateRecurringAppointment:
+    def test_rule_goes_into_comp(self, connected_client):
+        _setup_response(connected_client, _make_ok_response("CreateAppointmentResponse", {}))
+        rule = {"freq": "WEE", "interval": {"ival": 1}, "count": {"num": 4}}
+        connected_client.create_appointment("Weekly", 1900000000000, 1900003600000, recurrence=rule)
+        params = _get_request_params(connected_client)
+        assert params["m"]["inv"]["comp"]["recur"] == {"add": {"rule": rule}}

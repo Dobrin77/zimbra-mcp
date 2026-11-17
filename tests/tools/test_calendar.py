@@ -360,3 +360,155 @@ class TestInvitations:
         with pytest.raises(ZimbraOperationError, match=match):
             tools["respond_to_invitation"](*args)
         client.reply_to_invite.assert_not_called()
+
+
+class TestChangeAndCancel:
+    COMP = {
+        "uid": "u1", "name": "Review", "loc": "Room 1", "isOrg": True, "seq": 2, "x_uid": "u1",
+        "or": {"a": "test@example.com"},
+        "at": [{"a": "ivan@example.com", "ptst": "AC", "role": "REQ"}, {"a": "maria@example.com", "ptst": "DE"}],
+        "s": [{"d": "20301118T100000", "tz": "Europe/Sofia"}], "e": [{"d": "20301118T110000", "tz": "Europe/Sofia"}],
+        "desc": [{"_content": "Agenda"}],
+    }
+
+    def appt(self, **changes):
+        return {"appt": [{"id": "10", "inv": [{"id": 9, "comp": [{**self.COMP, **changes}]}]}]}
+
+    def tools(self, client, sending=True):
+        return capture_tools(register_calendar_tools, client, sending)
+
+    def test_move_to_another_time_resets_answers_and_notifies(self, connected_client):
+        tools = self.tools(connected_client)
+        connected_client.get_appointment = MagicMock(return_value=self.appt())
+        connected_client.modify_appointment = MagicMock(return_value={})
+        result = tools["update_event"]("10-9", new_time="11:30", note="Clash with a site visit")
+        connected_client.get_appointment.assert_called_once_with("10")
+        args, kwargs = connected_client.modify_appointment.call_args
+        invite_id, comp = args
+        assert invite_id == "10-9"
+        assert comp["s"] == {"d": "20301118T113000", "tz": "Europe/Sofia"}
+        assert comp["e"] == {"d": "20301118T123000", "tz": "Europe/Sofia"}
+        assert {a["ptst"] for a in comp["at"]} == {"NE"} and comp["loc"] == "Room 1"
+        assert "isOrg" not in comp and "seq" not in comp and "x_uid" not in comp
+        assert kwargs["notify"] == ["ivan@example.com", "maria@example.com"]
+        assert kwargs["body"] == "Clash with a site visit\n\nAgenda" and kwargs["occurrence_id"] is None
+        assert result["old_start"] == "2030-11-18 10:00" and result["new_end"] == "2030-11-18 12:30"
+        assert result["attendees_notified"] is True and result["whole_series"] is True
+
+    def test_change_location_only_keeps_answers(self, connected_client):
+        tools = self.tools(connected_client)
+        connected_client.get_appointment = MagicMock(return_value=self.appt())
+        connected_client.modify_appointment = MagicMock(return_value={})
+        tools["update_event"]("10-9", location="Room 2")
+        comp = connected_client.modify_appointment.call_args.args[1]
+        assert comp["loc"] == "Room 2" and [a["ptst"] for a in comp["at"]] == ["AC", "DE"]
+        assert comp["s"]["d"] == "20301118T100000"
+
+    def test_one_occurrence_of_a_series(self, connected_client):
+        tools = self.tools(connected_client)
+        connected_client.get_appointment = MagicMock(return_value=self.appt(recur={"add": {}}))
+        connected_client.modify_appointment = MagicMock(return_value={})
+        result = tools["update_event"]("10-9", new_date="2030-11-27", occurrence_id="20301125T080000Z")
+        comp = connected_client.modify_appointment.call_args.args[1]
+        assert comp["s"]["d"].startswith("20301127T")
+        assert connected_client.modify_appointment.call_args.kwargs["occurrence_id"] == "20301125T080000Z"
+        assert result["whole_series"] is False
+
+    def test_all_day_event_moves_by_date(self, connected_client):
+        tools = self.tools(connected_client)
+        connected_client.get_appointment = MagicMock(return_value=self.appt(
+            allDay="1", at=[], s=[{"d": "20301118"}], e=[{"d": "20301119"}]))
+        connected_client.modify_appointment = MagicMock(return_value={})
+        tools["update_event"]("10-9", new_date="2030-11-25")
+        comp = connected_client.modify_appointment.call_args.args[1]
+        assert comp["s"] == {"d": "20301125"} and comp["e"] == {"d": "20301126"}
+        assert connected_client.modify_appointment.call_args.kwargs["notify"] == []
+
+    def test_not_the_organizer(self, connected_client):
+        from zimbra_mcp.errors import ZimbraOperationError
+        tools = self.tools(connected_client)
+        connected_client.get_appointment = MagicMock(
+            return_value=self.appt(isOrg=False, **{"or": {"a": "boss@example.com"}}))
+        connected_client.modify_appointment = MagicMock()
+        connected_client.cancel_appointment = MagicMock()
+        with pytest.raises(ZimbraOperationError, match="Only the organizer"):
+            tools["update_event"]("10-9", new_time="12:00")
+        with pytest.raises(ZimbraOperationError, match="Only the organizer"):
+            tools["cancel_event"]("10-9")
+        connected_client.modify_appointment.assert_not_called()
+        connected_client.cancel_appointment.assert_not_called()
+
+    def test_nothing_to_change(self, cal_tools):
+        from zimbra_mcp.errors import ZimbraOperationError
+        tools, client = cal_tools
+        with pytest.raises(ZimbraOperationError, match="Say what to change"):
+            tools["update_event"]("10-9", note="hi")
+
+    def test_cancel_with_note(self, connected_client):
+        tools = self.tools(connected_client)
+        connected_client.get_appointment = MagicMock(return_value=self.appt())
+        connected_client.cancel_appointment = MagicMock(return_value={})
+        result = tools["cancel_event"]("10-9", note="Postponed")
+        args, kwargs = connected_client.cancel_appointment.call_args
+        assert args == ("10-9",) and kwargs["subject"] == "Cancelled: Review" and kwargs["body"] == "Postponed"
+        assert kwargs["notify"] == ["ivan@example.com", "maria@example.com"]
+        assert result["attendees_notified"] is True and result["whole_series"] is True
+
+    def test_cancel_without_sending(self, cal_tools):
+        tools, client = cal_tools
+        client.get_appointment = MagicMock(return_value=self.appt())
+        client.cancel_appointment = MagicMock(return_value={})
+        result = tools["cancel_event"]("10-9", occurrence_id="20301125T080000Z")
+        assert client.cancel_appointment.call_args.kwargs["notify"] == []
+        assert result["attendees_notified"] is False and "note" in result and result["whole_series"] is False
+
+
+class TestRepeat:
+    def test_weekly_series_with_count(self, cal_tools):
+        tools, client = cal_tools
+        client.create_appointment = MagicMock(return_value={"calItemId": "5", "invId": "5-4"})
+        result = tools["create_event"]("Weekly", "2030-11-20 10:00", "2030-11-20 11:00",
+                                       attendees=["ivan@example.com"], repeat="Weekly", repeat_count=4)
+        rule = client.create_appointment.call_args.kwargs["recurrence"]
+        assert rule == {"freq": "WEE", "interval": {"ival": 1}, "count": {"num": 4},
+                        "byday": {"wkday": [{"day": "WE"}]}}
+        assert client.create_appointment.call_count == 1
+        assert result["repeat"] == {"every": 1, "unit": "weekly", "count": 4, "until": None}
+
+    def test_weekdays_until_a_day(self, cal_tools):
+        tools, client = cal_tools
+        client.create_appointment = MagicMock(return_value={})
+        tools["create_event"]("Stand-up", "2030-11-18 09:00", "2030-11-18 09:15",
+                              repeat="weekdays", repeat_until="2030-12-20")
+        rule = client.create_appointment.call_args.kwargs["recurrence"]
+        assert rule["freq"] == "WEE" and len(rule["byday"]["wkday"]) == 5
+        assert rule["until"]["d"].startswith("2030122") and rule["until"]["d"].endswith("Z")
+
+    def test_monthly_on_the_day_of_month(self, cal_tools):
+        tools, client = cal_tools
+        client.create_appointment = MagicMock(return_value={})
+        tools["create_event"]("Report", "2030-11-15 09:00", "2030-11-15 10:00", repeat="monthly", repeat_every=2)
+        rule = client.create_appointment.call_args.kwargs["recurrence"]
+        assert rule == {"freq": "MON", "interval": {"ival": 2}, "bymonthday": {"modaylist": "15"}}
+
+    def test_one_off_has_no_rule(self, cal_tools):
+        tools, client = cal_tools
+        client.create_appointment = MagicMock(return_value={})
+        result = tools["create_event"]("Once", "2030-11-18 09:00", "2030-11-18 10:00")
+        assert client.create_appointment.call_args.kwargs["recurrence"] is None
+        assert "repeat" not in result
+
+    @pytest.mark.parametrize("kwargs,match", [
+        ({"repeat": "yearly"}, "repeat must be"),
+        ({"repeat_count": 3}, "Give repeat"),
+        ({"repeat": "weekly", "repeat_count": 3, "repeat_until": "2030-12-01"}, "not both"),
+        ({"repeat": "weekly", "repeat_count": 1}, "repeat_count must be"),
+        ({"repeat": "weekly", "repeat_every": 0}, "repeat_every must be"),
+    ])
+    def test_refused(self, cal_tools, kwargs, match):
+        from zimbra_mcp.errors import ZimbraOperationError
+        tools, client = cal_tools
+        client.create_appointment = MagicMock()
+        with pytest.raises(ZimbraOperationError, match=match):
+            tools["create_event"]("X", "2030-11-18 09:00", "2030-11-18 10:00", **kwargs)
+        client.create_appointment.assert_not_called()

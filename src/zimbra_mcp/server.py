@@ -38,7 +38,11 @@ INSTRUCTIONS = (
     "To find a colleague's e-mail address by name, use find_colleague (search_contacts only has the "
     "user's own contacts). To find a time when several people are free for a meeting, use find_meeting_time; "
     "create the meeting with create_event only after the user has picked a time. Before "
-    "respond_to_invitation, tell the user which meeting and which answer, and wait for their confirmation."
+    "respond_to_invitation, tell the user which meeting and which answer, and wait for their confirmation. "
+    "Before update_event or cancel_event, tell the user which meeting and exactly what will change, "
+    "and wait for their confirmation. "
+    "For a daily overview (\"what is on today\"), combine today's get_calendar_events, list_invitations "
+    "and unread mail from search_emails (is:unread) into one short summary."
 )
 SEND_INSTRUCTIONS = (
     " Before send_email, always show the user the full message (recipients, subject, body) "

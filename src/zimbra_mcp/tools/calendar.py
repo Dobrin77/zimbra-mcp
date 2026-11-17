@@ -1,13 +1,13 @@
 """MCP tools for Zimbra calendar management."""
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
 from zimbra_mcp.client import ZimbraClient, _as_list
 from zimbra_mcp.errors import ZimbraOperationError
-from zimbra_mcp.tools.annotations import READ_ONLY, WRITE
+from zimbra_mcp.tools.annotations import DESTRUCTIVE, READ_ONLY, WRITE
 
 MEETING_MAX_PEOPLE = 50
 MEETING_MAX_DAYS = 31
@@ -176,8 +176,16 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient, send_invites: 
         description: str | None = None,
         attendees: list[str] | None = None,
         all_day: bool = False,
+        repeat: str | None = None,
+        repeat_every: int = 1,
+        repeat_count: int | None = None,
+        repeat_until: str | None = None,
     ) -> dict[str, Any]:
-        """Create a calendar event or a meeting (насрочи среща, покани).
+        """Create a calendar event or a meeting (насрочи среща, покани, седмична, всеки ден,
+        повтаряща се).
+
+        For a repeating event use repeat: it makes one series, and attendees answer the
+        invitation once for all of it. Never create several separate events instead.
 
         With attendees it is a meeting: if sending is enabled on the server, each
         attendee gets an invitation e-mail they can accept or decline. Before calling
@@ -192,6 +200,11 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient, send_invites: 
             description: Event description, also the text of the invitation (optional)
             attendees: List of attendee emails (optional); look names up with find_colleague
             all_day: All-day event (default: False)
+            repeat: "daily", "weekdays" (Monday to Friday), "weekly" or "monthly" (optional);
+                weekly and monthly repeat on the start's weekday or day of month
+            repeat_every: Repeat every N days, weeks or months (default 1; 2 = every other)
+            repeat_count: How many times in all (optional)
+            repeat_until: Last day, YYYY-MM-DD (optional); with neither, the series has no end
 
         Returns:
             Information about the created event and whether invitations were sent
@@ -207,6 +220,7 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient, send_invites: 
                 start_dt = datetime.strptime(start_datetime, "%Y-%m-%dT%H:%M")
                 end_dt = datetime.strptime(end_datetime, "%Y-%m-%dT%H:%M")
 
+        recurrence = _recurrence(repeat, repeat_every, repeat_count, repeat_until, all_day, start_dt.date())
         start_ms = int(start_dt.timestamp() * 1000)
         end_ms = int(end_dt.timestamp() * 1000)
 
@@ -219,6 +233,7 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient, send_invites: 
             attendees=attendees,
             all_day=all_day,
             send_invites=send_invites,
+            recurrence=recurrence,
         )
 
         invited = bool(attendees) and send_invites
@@ -234,6 +249,9 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient, send_invites: 
             "all_day": all_day,
             "invitations_sent": invited,
         }
+        if recurrence:
+            response["repeat"] = {"every": repeat_every, "unit": repeat.strip().lower(),
+                                  "count": repeat_count, "until": repeat_until}
         if attendees and not send_invites:
             response["note"] = (
                 "Sending is disabled on this server, so no invitations were e-mailed; the attendees "
@@ -429,6 +447,177 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient, send_invites: 
             )
         return result
 
+    def _own_event(invite_id: str) -> tuple[str, dict]:
+        """The event's main component, if the user may change it (organizer or own event)."""
+        invite_id = str(invite_id or "").strip()
+        if not invite_id:
+            raise ZimbraOperationError("Give the invite_id from get_calendar_events.")
+        appt = _first(client.get_appointment(invite_id.split("-")[0]).get("appt"))
+        invites = _as_list(appt.get("inv"))
+        wanted = invite_id.split("-")[-1]
+        inv = next((i for i in invites if str(i.get("id")) == wanted), _first(invites))
+        comp = _first(inv.get("comp"))
+        if not comp:
+            raise ZimbraOperationError("No such event.")
+        organizer = (comp.get("or") or {}).get("a")
+        if organizer and organizer.lower() != client.config.user.lower() and not _truthy(comp.get("isOrg")):
+            raise ZimbraOperationError(
+                f"Only the organizer ({organizer}) can change or cancel this meeting. "
+                "Use respond_to_invitation to decline it or suggest another time."
+            )
+        return invite_id, comp
+
+    @mcp.tool(annotations=WRITE)
+    def update_event(
+        invite_id: str,
+        new_date: str | None = None,
+        new_time: str | None = None,
+        duration_minutes: int | None = None,
+        subject: str | None = None,
+        location: str | None = None,
+        note: str | None = None,
+        occurrence_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Move or change an event or a meeting the user organises (премести, отложи,
+        промени час, смени залата).
+
+        The attendees get the updated invitation (when sending is enabled on the server)
+        and are asked to answer again if the time changed. Before calling it, tell the user
+        what will change and wait for confirmation. Give only what changes.
+
+        Args:
+            invite_id: invite_id from get_calendar_events
+            new_date: New day, YYYY-MM-DD (optional; for a whole series it moves its first day)
+            new_time: New start time, HH:MM (optional)
+            duration_minutes: New length in minutes (optional; the length stays otherwise)
+            subject: New title (optional)
+            location: New location (optional)
+            note: Short note to the attendees, e.g. the reason (optional, up to 1000 characters)
+            occurrence_id: For a recurring event, the occurrence_id of one time to change only
+                that one; without it the whole series changes
+
+        Returns:
+            The old and new time and whether the attendees were notified
+        """
+        if not any(v is not None for v in (new_date, new_time, duration_minutes, subject, location)):
+            raise ZimbraOperationError("Say what to change: new_date, new_time, duration_minutes, subject or location.")
+        note = (note or "").strip()
+        if len(note) > 1000:
+            raise ZimbraOperationError("The note may be at most 1000 characters.")
+        occurrence_id = (occurrence_id or "").strip() or None
+        invite_id, comp = _own_event(invite_id)
+
+        all_day = _truthy(comp.get("allDay"))
+        start_info, end_info = _first(comp.get("s")), _first(comp.get("e"))
+        old_start = _zimbra_time(occurrence_id) if occurrence_id else _zimbra_time(start_info.get("d"))
+        old_length = _length(comp, start_info, end_info, all_day)
+        if all_day and (new_time or duration_minutes):
+            raise ZimbraOperationError("This is an all-day event: only new_date can move it.")
+        if duration_minutes is not None and not 5 <= duration_minutes <= 24 * 60:
+            raise ZimbraOperationError("duration_minutes must be between 5 and 1440.")
+
+        new_start = old_start
+        if new_date:
+            new_start = datetime.combine(_day(new_date, "new_date"), new_start.time())
+        if new_time:
+            new_start = datetime.combine(new_start.date(), _clock(new_time, "new_time"))
+        length = timedelta(minutes=duration_minutes) if duration_minutes else old_length
+        new_end = new_start + length
+        moved = new_start != old_start or length != old_length
+
+        fmt = "%Y%m%d" if all_day else "%Y%m%dT%H%M%S"
+        updated = {k: v for k, v in comp.items() if k in _KEEP_FIELDS}
+        tz = {"tz": start_info["tz"]} if start_info.get("tz") and not all_day else {}
+        updated["s"] = {"d": new_start.strftime(fmt), **tz}
+        # An all-day end is the last day itself, not the day after.
+        updated["e"] = {"d": (new_end - timedelta(days=1) if all_day else new_end).strftime(fmt), **tz}
+        if subject:
+            updated["name"] = subject.strip()
+        if location is not None:
+            updated["loc"] = location.strip()
+        attendees = [a for a in _as_list(comp.get("at")) if isinstance(a, dict) and a.get("a")]
+        if moved:
+            # A new time needs a new answer, as in Outlook.
+            updated["at"] = [{**a, "ptst": "NE", "rsvp": "1"} for a in attendees]
+
+        name = updated.get("name", "")
+        emails = [a["a"] for a in attendees]
+        notify = emails if send_invites else []
+        client.modify_appointment(
+            invite_id, updated, subject=name, notify=notify,
+            body="\n\n".join(p for p in (note, _description(comp)) if p),
+            occurrence_id=occurrence_id,
+        )
+
+        out_fmt = "%Y-%m-%d" if all_day else "%Y-%m-%d %H:%M"
+        result: dict[str, Any] = {
+            "success": True,
+            "invite_id": invite_id,
+            "name": name,
+            "old_start": old_start.strftime(out_fmt),
+            "new_start": new_start.strftime(out_fmt),
+            "new_end": new_end.strftime(out_fmt),
+            "whole_series": occurrence_id is None,
+            "attendees": emails,
+            "attendees_notified": bool(notify),
+        }
+        if emails and not send_invites:
+            result["note"] = (
+                "Sending is disabled on this server: the event changed in the user's calendar, but "
+                "the attendees were not told. Tell the user to send the update from Outlook."
+            )
+        return result
+
+    @mcp.tool(annotations=DESTRUCTIVE)
+    def cancel_event(
+        invite_id: str,
+        note: str | None = None,
+        occurrence_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Cancel an event or a meeting the user organises (отмени срещата).
+
+        The attendees get a cancellation (when sending is enabled on the server), with the
+        note if given. The event leaves the calendars. Before calling it, tell the user which
+        meeting will be cancelled and wait for confirmation.
+
+        Args:
+            invite_id: invite_id from get_calendar_events
+            note: Short note to the attendees, e.g. the reason (optional, up to 1000 characters)
+            occurrence_id: For a recurring event, the occurrence_id of one time to cancel only
+                that one; without it the whole series is cancelled
+
+        Returns:
+            What was cancelled and whether the attendees were notified
+        """
+        note = (note or "").strip()
+        if len(note) > 1000:
+            raise ZimbraOperationError("The note may be at most 1000 characters.")
+        occurrence_id = (occurrence_id or "").strip() or None
+        invite_id, comp = _own_event(invite_id)
+        name = comp.get("name", "")
+        emails = [a["a"] for a in _as_list(comp.get("at")) if isinstance(a, dict) and a.get("a")]
+        notify = emails if send_invites else []
+        client.cancel_appointment(
+            invite_id, subject=f"Cancelled: {name}".strip(), notify=notify,
+            body=note or f"The meeting \"{name}\" has been cancelled.", occurrence_id=occurrence_id,
+        )
+        result: dict[str, Any] = {
+            "success": True,
+            "invite_id": invite_id,
+            "name": name,
+            "whole_series": not occurrence_id,
+            "attendees": emails,
+            "attendees_notified": bool(notify),
+        }
+        if occurrence_id:
+            result["cancelled_time"] = _zimbra_time(occurrence_id).strftime("%Y-%m-%d %H:%M")
+        if emails and not send_invites:
+            result["note"] = (
+                "Sending is disabled on this server: the event was removed from the user's calendar, "
+                "but the attendees were not told. Tell the user to let them know."
+            )
+        return result
+
     @mcp.tool(annotations=READ_ONLY)
     def find_meeting_time(
         attendees: list[str],
@@ -543,6 +732,87 @@ def register_calendar_tools(mcp: MCPServer, client: ZimbraClient, send_invites: 
 
 RESPONSE_VERBS = {"accept": "ACCEPT", "decline": "DECLINE", "tentative": "TENTATIVE"}
 RESPONSE_SUBJECTS = {"ACCEPT": "Accepted", "DECLINE": "Declined", "TENTATIVE": "Tentative"}
+
+
+# What update_event sends back of an event's component; Zimbra replaces the whole of it.
+_KEEP_FIELDS = (
+    "uid", "name", "loc", "fb", "fba", "transp", "class", "status", "allDay", "or", "at",
+    "recur", "desc", "descHtml", "alarm", "priority", "cat", "url", "xprop",
+)
+
+
+_REPEAT_FREQ = {"daily": "DAI", "weekdays": "WEE", "weekly": "WEE", "monthly": "MON"}
+REPEAT_MAX_COUNT = 500
+_WEEKDAYS = ("MO", "TU", "WE", "TH", "FR", "SA", "SU")
+
+
+def _recurrence(repeat: str | None, every: int, count: int | None, until: str | None,
+                all_day: bool, first: date) -> dict[str, Any] | None:
+    """A Zimbra recurrence rule for create_event, or None for a one-off event."""
+    if not repeat:
+        if count or until:
+            raise ZimbraOperationError("Give repeat (daily, weekdays, weekly or monthly) as well.")
+        return None
+    kind = repeat.strip().lower()
+    if kind not in _REPEAT_FREQ:
+        raise ZimbraOperationError('repeat must be "daily", "weekdays", "weekly" or "monthly".')
+    if not 1 <= every <= 99:
+        raise ZimbraOperationError("repeat_every must be between 1 and 99.")
+    if count is not None and until:
+        raise ZimbraOperationError("Give either repeat_count or repeat_until, not both.")
+    rule: dict[str, Any] = {"freq": _REPEAT_FREQ[kind], "interval": {"ival": every}}
+    if kind == "weekdays":
+        rule["byday"] = {"wkday": [{"day": d} for d in _WEEKDAYS[:5]]}
+    elif kind == "weekly":
+        # Named explicitly so every client shows the day ("every week on Wednesday").
+        rule["byday"] = {"wkday": [{"day": _WEEKDAYS[first.weekday()]}]}
+    elif kind == "monthly":
+        rule["bymonthday"] = {"modaylist": str(first.day)}
+    if count is not None:
+        if not 2 <= count <= REPEAT_MAX_COUNT:
+            raise ZimbraOperationError(f"repeat_count must be between 2 and {REPEAT_MAX_COUNT}.")
+        rule["count"] = {"num": count}
+    elif until:
+        last = _day(until, "repeat_until")
+        if all_day:
+            rule["until"] = {"d": last.strftime("%Y%m%d")}
+        else:
+            # UNTIL is in UTC when the start has a time zone: the end of that day, local time.
+            end = datetime.combine(last, time(23, 59, 59)).astimezone(timezone.utc)
+            rule["until"] = {"d": end.strftime("%Y%m%dT%H%M%SZ")}
+    return rule
+
+
+def _zimbra_time(value: Any) -> datetime:
+    """A Zimbra date-time (20261118T100000, ...Z in UTC, or an all-day 20261118) as local time."""
+    text = str(value or "").strip()
+    try:
+        if text.endswith("Z"):
+            utc = datetime.strptime(text, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+            return utc.astimezone().replace(tzinfo=None)
+        if "T" in text:
+            return datetime.strptime(text, "%Y%m%dT%H%M%S")
+        return datetime.strptime(text, "%Y%m%d")
+    except ValueError:
+        raise ZimbraOperationError(f"Unexpected date in the event: {text!r}")
+
+
+def _length(comp: dict, start: dict, end: dict, all_day: bool) -> timedelta:
+    if end.get("d") and start.get("d"):
+        length = _zimbra_time(end["d"]) - _zimbra_time(start["d"])
+        return length + timedelta(days=1) if all_day else length
+    dur = _first(comp.get("dur"))
+    if dur:
+        return timedelta(weeks=int(dur.get("w", 0)), days=int(dur.get("d", 0)), hours=int(dur.get("h", 0)),
+                         minutes=int(dur.get("m", 0)), seconds=int(dur.get("s", 0)))
+    return timedelta(days=1) if all_day else timedelta(hours=1)
+
+
+def _description(comp: dict) -> str:
+    desc = comp.get("desc")
+    if isinstance(desc, str):
+        return desc
+    return str(_first(desc).get("_content") or "")
 
 
 def _first(value: Any) -> dict:

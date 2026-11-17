@@ -345,6 +345,23 @@ zmprov revokeRight dl staff@example.com usr office@example.com ownDistList
 
 Собствениците, зададени в по-стара Zimbra, може да не оцелеят при миграция. След миграция проверете раздела Owners.
 
+### Кой още не е регистриран
+
+Показва кой има активен акаунт в Zimbra, но още няма passkey, подреден по фирми (полето **Company** в акаунта). Системните акаунти, ресурсите (зали, техника) и скритите от адресната книга не се броят. Общите кутии (office@, careers@ и т.н.) са обикновени акаунти и излизат в списъка.
+
+```bash
+# Всички служители
+docker compose exec zimbra-mcp zimbra-mcp-admin not-enrolled
+
+# Само хората с лиценз за Claude: файл с по един адрес на ред, например износ от Claude
+docker compose exec -T zimbra-mcp zimbra-mcp-admin not-enrolled --file - < claude-members.txt
+
+# За Excel
+docker compose exec -T zimbra-mcp zimbra-mcp-admin not-enrolled --csv > not-enrolled.csv
+```
+
+С `--file` адресите, които не са активни акаунти в Zimbra, излизат отделно в края.
+
 ### Справка за ползването
 
 **Цел:** да се види дали хората реално ползват конектора и кой има нужда от помощ. Справката може например всяка седмица да отива към ръководството, до справката от самия Claude (Admin → Analytics). Тя показва колко ползва всеки Claude изобщо. Тази показва колко от това е работа с пощата и календара.

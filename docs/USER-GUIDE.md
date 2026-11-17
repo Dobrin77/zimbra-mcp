@@ -78,6 +78,10 @@ Good to know:
 - **The server keeps mail for a limited time.** For older messages, see section 5.
 - **After an update:** if IT announces new features, open a **new chat**. If Claude still doesn't see them: **Settings → Connectors → Disconnect → Connect**.
 
+### Morning overview
+
+In the morning, say *"What's on today?"*. Claude sums up your meetings for the day, the invitations you have not answered yet and your unread mail. You can also ask *"What's on tomorrow?"* or *"... this week?"*.
+
 ### Out-of-office auto-reply
 
 Tell Claude, for example:
@@ -120,6 +124,19 @@ Claude checks everyone's availability at once and suggests times when all of the
 It looks within working hours, 9:00 to 18:00 Monday to Friday, unless you say otherwise, and checks your own calendar too. Each day it suggests one morning and one afternoon time. If there is no common free time, Claude shows the closest options and who is busy then. It sees only when people are busy, never what is in their calendars.
 
 Once you pick a time, say *"Book it on Wednesday at 10:00, subject ..."*. Claude creates the meeting and sends the invitations. Colleagues accept or decline them as usual, and their replies show in your meeting.
+
+**Repeating meetings.** Say for example *"Book a weekly team meeting every Monday at 9:00 with ..., until the end of the year"* or *"... every weekday at 9:00 for 15 minutes"*. Claude creates one series, so colleagues answer the invitation once for all of it. It can repeat every day, every weekday, every week or every month, or every other week or month. Say until when or how many times; otherwise the series has no end.
+
+### Moving and cancelling a meeting
+
+Claude can move, change or cancel the meetings you organised. Examples:
+
+- *"Move the Wednesday meeting an hour later"*
+- *"Change the room of tomorrow's meeting to Meeting Room 2"*
+- *"Cancel the Friday meeting and say it is postponed to next week"*
+- *"This Wednesday the weekly meeting is at 14:00, the others stay"*: for a recurring meeting you can change or cancel the whole series or just one day.
+
+Claude says what will change and waits for your confirmation. The attendees get an updated invitation or a cancellation, and answer again if the time changed. You cannot change meetings organised by others; you can only answer them, for example decline and suggest another time.
 
 ### Meeting invitations
 

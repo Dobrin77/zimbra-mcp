@@ -28,6 +28,7 @@ class Account:
     email: str  # canonical address (zimbraMailDeliveryAddress)
     display_name: str
     active: bool
+    company: str = ""
 
 
 class AccountDirectory:
@@ -67,10 +68,42 @@ class AccountDirectory:
         with self._lock:
             self._cache.pop(email.strip().lower(), None)
 
-    def _search(self, email: str) -> Account | None:
-        domain = email.rsplit("@", 1)[1]
+    def all_people(self) -> list[Account]:
+        """Every active account in the configured domains that people would recognise.
+
+        System accounts, calendar resources and accounts hidden from the address
+        book are left out. Raises on LDAP errors.
+        """
+        # Filtered here rather than in LDAP: a filter on an attribute the bind
+        # account may not read would silently drop every entry.
+        hidden = ("zimbraIsSystemResource", "zimbraIsSystemAccount", "zimbraHideInGal")
+        people = []
+        with self._connect() as conn:
+            for domain in sorted(self.settings.allowed_domains):
+                entries = conn.extend.standard.paged_search(
+                    self._base(domain), "(objectClass=zimbraAccount)", search_scope=SUBTREE,
+                    attributes=_ATTRS + ["company", "objectClass", *hidden], paged_size=500, generator=False,
+                )
+                for entry in entries:
+                    if entry.get("type") != "searchResEntry":
+                        continue
+                    attrs = entry["attributes"]
+                    classes = [str(c).lower() for c in attrs.get("objectClass") or []]
+                    if "zimbracalendarresource" in classes:
+                        continue
+                    if any(str(_first(attrs.get(name))).upper() == "TRUE" for name in hidden):
+                        continue
+                    account = _account(attrs)
+                    if account and account.active:
+                        people.append(account)
+        return sorted(people, key=lambda a: (a.company.lower(), a.display_name.lower()))
+
+    def _base(self, domain: str) -> str:
         domain_dn = ",".join(f"dc={part}" for part in domain.split("."))
-        base = self.settings.ldap_base_dn_template.format(domain_dn=domain_dn, domain=domain)
+        return self.settings.ldap_base_dn_template.format(domain_dn=domain_dn, domain=domain)
+
+    def _search(self, email: str) -> Account | None:
+        base = self._base(email.rsplit("@", 1)[1])
         value = escape_filter_chars(email)
         search_filter = (
             f"(&(objectClass=zimbraAccount)"
@@ -83,21 +116,7 @@ class AccountDirectory:
 
         if len(entries) != 1:
             return None
-        entry = entries[0].entry_attributes_as_dict
-
-        canonical = _first(entry.get("zimbraMailDeliveryAddress")) or email
-        # The read-only zmpostfix account may not be allowed to read
-        # zimbraAccountStatus; an unreadable attribute is not a denial, because
-        # the preauth login that follows fails on its own for inactive accounts.
-        account_status = _first(entry.get("zimbraAccountStatus"))
-        mail_status = _first(entry.get("zimbraMailStatus"))
-        active = account_status in (None, "active") and mail_status in (None, "enabled")
-
-        return Account(
-            email=canonical.lower(),
-            display_name=_first(entry.get("displayName")) or canonical,
-            active=active,
-        )
+        return _account(entries[0].entry_attributes_as_dict, email)
 
     def _connect(self) -> Connection:
         s = self.settings
@@ -117,6 +136,23 @@ class AccountDirectory:
             receive_timeout=10,
             read_only=True,
         )
+
+
+def _account(entry: dict, email: str | None = None) -> Account | None:
+    canonical = _first(entry.get("zimbraMailDeliveryAddress")) or email
+    if not canonical:
+        return None
+    # The read-only zmpostfix account may not be allowed to read
+    # zimbraAccountStatus; an unreadable attribute is not a denial, because
+    # the preauth login that follows fails on its own for inactive accounts.
+    account_status = _first(entry.get("zimbraAccountStatus"))
+    mail_status = _first(entry.get("zimbraMailStatus"))
+    return Account(
+        email=canonical.lower(),
+        display_name=_first(entry.get("displayName")) or canonical,
+        active=account_status in (None, "active") and mail_status in (None, "enabled"),
+        company=_first(entry.get("company")) or "",
+    )
 
 
 def _first(value):

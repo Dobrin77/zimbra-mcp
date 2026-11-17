@@ -345,6 +345,23 @@ Being a **member** of a list (Member Of) is not enough: it only means receiving 
 
 Owners set in an older Zimbra may not survive a migration. Check the Owners tab after migrating.
 
+### Who has not enrolled yet
+
+Lists who has an active Zimbra account but no passkey yet, grouped by company (the account's **Company** field). System accounts, resources (rooms, equipment) and accounts hidden from the address book are left out. Shared mailboxes (office@, careers@ and so on) are ordinary accounts and do show up.
+
+```bash
+# Everyone
+docker compose exec zimbra-mcp zimbra-mcp-admin not-enrolled
+
+# Only the people with a Claude seat: a file with one address per line, e.g. an export from Claude
+docker compose exec -T zimbra-mcp zimbra-mcp-admin not-enrolled --file - < claude-members.txt
+
+# For Excel
+docker compose exec -T zimbra-mcp zimbra-mcp-admin not-enrolled --csv > not-enrolled.csv
+```
+
+With `--file`, addresses that are not active Zimbra accounts are listed separately at the end.
+
 ### Usage report
 
 **Purpose:** to see whether people really use the connector, and who might need help. For example, the report can go to management each week next to Claude's own usage analytics (Admin → Analytics). Those show how much each person uses Claude at all; this shows how much of that is work with their mail and calendar.

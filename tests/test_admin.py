@@ -66,3 +66,33 @@ def test_dav_tokens_check_list_and_revoke(tmp_path, capsys):
     assert store.dav_tokens("ivan@example.com") == []
     assert main(["--data-dir", str(tmp_path), "revoke", "maria@example.com"]) == 0
     assert store.dav_tokens() == []
+
+
+class People(Directory):
+    def all_people(self):
+        return [
+            Account("ana@example.com", "Ana", True, "Beta"),
+            Account("ivan@example.com", "Ivan", True, "Acme"),
+            Account("maria@example.com", "Maria", True, "Acme"),
+        ]
+
+
+def test_not_enrolled_lists_people_without_a_passkey_by_company(tmp_path, capsys):
+    from zimbra_mcp.admin import print_not_enrolled
+
+    store = Storage(tmp_path / "db.sqlite3")
+    store.add_passkey("cred-1", "maria@example.com", b"key", 0, None)
+    assert print_not_enrolled(store, People(), None, as_csv=False) == 0
+    out = capsys.readouterr().out
+    assert "1 of 3 people have a passkey; 2 not yet" in out
+    assert out.index("Acme") < out.index("ivan@example.com") < out.index("Beta") < out.index("ana@example.com")
+    assert "maria@example.com" not in out
+
+
+def test_not_enrolled_checks_only_the_given_addresses(tmp_path, capsys):
+    from zimbra_mcp.admin import print_not_enrolled
+
+    store = Storage(tmp_path / "db.sqlite3")
+    print_not_enrolled(store, People(), ["ivan@example.com", "nobody@example.com"], as_csv=True)
+    out = capsys.readouterr().out
+    assert out.splitlines() == ["email,name,company", "ivan@example.com,Ivan,"]

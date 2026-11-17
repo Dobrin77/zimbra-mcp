@@ -5,6 +5,7 @@ Run inside the container, e.g.:
     docker compose exec zimbra-mcp zimbra-mcp-admin revoke user@example.com
     docker compose exec zimbra-mcp zimbra-mcp-admin invite user@example.com
     docker compose exec zimbra-mcp zimbra-mcp-admin usage --days 7 --csv > usage.csv
+    docker compose exec zimbra-mcp zimbra-mcp-admin not-enrolled
 """
 
 import argparse
@@ -93,7 +94,13 @@ def main(argv: list[str] | None = None) -> int:
         "dav-revoke", help="stop calendar tokens: one by its ID (see 'dav-tokens') or all of an account"
     )
     dav_revoke.add_argument("target", metavar="id|email")
-    usage = sub.add_parser("usage", help="how often each person used the connector (counts only)")
+    missing = sub.add_parser(
+        "not-enrolled", help="who has an active Zimbra account but no passkey yet, by company"
+    )
+    missing.add_argument("--file", help="check only these addresses, one per line, e.g. the people "
+                                        "with a Claude seat ('-' reads standard input)")
+    missing.add_argument("--csv", action="store_true", help="print CSV for Excel instead of a table")
+    usage = sub.add_parser("usage",help="how often each person used the connector (counts only)")
     usage.add_argument("--days", type=int, help="how many days back, today included (default 7, max 91)")
     usage.add_argument("--from", dest="start", metavar="YYYY-MM-DD", help="first day, e.g. a Monday")
     usage.add_argument("--to", dest="end", metavar="YYYY-MM-DD", help="last day, included (default today)")
@@ -162,6 +169,16 @@ def main(argv: list[str] | None = None) -> int:
             print("Removed." if ok else "No such calendar token.")
             return 0 if ok else 1
         print(f"Removed {store.delete_dav_tokens_for(args.target.lower())} calendar token(s).")
+    elif args.command == "not-enrolled":
+        only = None
+        if args.file:
+            text = sys.stdin.read() if args.file == "-" else Path(args.file).read_text(encoding="utf-8")
+            only = parse_address_list(text)
+        from zimbra_mcp.config import Settings
+        from zimbra_mcp.directory import AccountDirectory
+
+        directory = AccountDirectory(Settings.from_env())
+        return print_not_enrolled(store, directory, only, args.csv)
     elif args.command == "usage":
         if args.days is not None and not 1 <= args.days <= USAGE_KEEP_DAYS:
             parser.error(f"--days must be between 1 and {USAGE_KEEP_DAYS}")
@@ -173,6 +190,42 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(str(e))
         people = sorted({p.email for p in store.all_passkeys()})
         print_usage(usage_report(store, first, last, people), first, last, args.csv)
+    return 0
+
+
+def print_not_enrolled(store: Storage, directory, only: list[str] | None, as_csv: bool) -> int:
+    """Print who has no passkey yet. With ``only``, check just those addresses."""
+    enrolled = {p.email for p in store.all_passkeys()}
+    unknown: list[str] = []
+    if only is None:
+        people = directory.all_people()
+    else:
+        people = []
+        for email in dict.fromkeys(only):
+            account = directory.active_account(email)
+            if account is None:
+                unknown.append(email)
+            else:
+                people.append(account)
+    people.sort(key=lambda a: (a.company.lower(), a.display_name.lower()))
+    missing = [a for a in people if a.email not in enrolled]
+
+    if as_csv:
+        writer = csv.writer(sys.stdout, lineterminator="\n")
+        writer.writerow(["email", "name", "company"])
+        for a in missing:
+            writer.writerow([a.email, a.display_name, a.company])
+        return 0
+
+    print(f"{len(people) - len(missing)} of {len(people)} people have a passkey; {len(missing)} not yet:")
+    company = None
+    for a in missing:
+        if a.company != company:
+            company = a.company
+            print(f"\n  {company or '(no company)'}")
+        print(f"    {a.email:<35} {a.display_name}")
+    if unknown:
+        print(f"\nNot an active Zimbra account ({len(unknown)}): " + ", ".join(unknown))
     return 0
 
 
