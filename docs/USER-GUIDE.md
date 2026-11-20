@@ -28,7 +28,7 @@ A passkey replaces the password: you confirm with Windows Hello (PIN, fingerprin
 1. Open **https://mcp.example.com/enroll**.
 2. Enter your work e-mail and press **Send code**.
 3. Enter the code that arrives in your mailbox. The code is valid for 15 minutes. If it expires, press **Send code** again.
-4. Confirm with Windows Hello, a fingerprint or your phone.
+4. Confirm with Windows Hello, a fingerprint or your phone. If the window offers only a phone or a QR code, press **Change** and choose **Windows Hello**.
 
 **If you don't work from the office:** ask IT for an **invite**. You'll get a personal link by phone, Viber or SMS. Open it, press **Send code**, enter the code from your mailbox and confirm with a passkey. The link works only once, only for your account, and is valid for 72 hours.
 
